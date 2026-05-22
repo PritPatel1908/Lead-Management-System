@@ -1,0 +1,289 @@
+{% extends 'components/base.html' %}
+
+{% load static %}
+{% block content %}
+<nav class="mb-3" style="--falcon-breadcrumb-divider: '»';" aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'company_list' %}">Companies</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if company %}Edit Company{% else %}Add New Company{% endif %}</li>
+  </ol>
+</nav>
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row flex-between-center">
+      <div class="col-md">
+        <h5 class="mb-2 mb-md-0">{% if company %}Edit company{% else %}Add a company{% endif %}</h5>
+      </div>
+      <div class="col-auto">
+        <a class="btn btn-falcon-default me-3 fw-medium" href="{% url 'company_list' %}" role="button">Back</a>
+        <button form="company-form" type="submit" name="action" value="draft" class="btn btn-primary">Draft company</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="row g-0">
+  <div class="col-lg-12 pe-lg-2">
+    <div class="card mb-3">
+      <div class="card-header bg-body-tertiary">
+        <h6 class="mb-0">Basic information</h6>
+      </div>
+      <div class="card-body">
+        <form id="company-form" method="post" action="{% if company %}{% url 'edit_company' %}{% else %}{% url 'add_company' %}{% endif %}" novalidate>
+          {% csrf_token %}
+          {% if company %}<input type="hidden" name="id" value="{{ company.id }}">{% endif %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+          <div class="row gx-2" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; ">
+            <div class="col-6 mb-3">
+              <label class="form-label" for="company-name">Company name:</label>
+              {{ form.name }}
+              {% for error in form.name.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label" for="company-code">Company code:</label>
+              {{ form.code }}
+              {% for error in form.code.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-sm-12 mb-3">
+              <label class="form-label d-flex align-items-center" for="locations">Locations:
+                <div class="ms-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary choices-select-all" data-target="locations">Select all</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ms-1 choices-unselect-all" data-target="locations">Unselect all</button>
+                </div>
+              </label>
+              {{ form.locations }}
+              {% for error in form.locations.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="row gx-2" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; ">
+            <div class="col-sm-12 mb-3">
+              <label class="form-label" for="status">Status: </label>
+              {{ form.status }}
+              {% for error in form.status.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="card mt-3">
+  <div class="card-body">
+    <div class="row justify-content-between align-items-center">
+      <div class="col-md">
+        <h5 class="mb-2 mb-md-0">You're almost done!</h5>
+      </div>
+      <div class="col-auto">
+        <a class="btn btn-link text-secondary p-0 me-3 fw-medium" href="{% url 'company_list' %}" role="button">Back</a>
+        <button form="company-form" type="submit" name="action" value="publish" class="btn btn-primary">{% if company %}Update company{% else %}Add company{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+  
+<!-- Toast area (toasts will be injected here) -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var form = document.getElementById('company-form');
+  if (!form) return;
+
+  // Create toast container in document body (top-right)
+  var toastArea = document.createElement('div');
+  toastArea.setAttribute('aria-live','polite');
+  toastArea.setAttribute('aria-atomic','true');
+  toastArea.style.position = 'fixed';
+  toastArea.style.top = '1rem';
+  toastArea.style.right = '1rem';
+  toastArea.style.zIndex = '1080';
+  toastArea.id = 'toast-area';
+  document.body.appendChild(toastArea);
+
+  function showToast(message, type) {
+    type = type || 'danger';
+    var toastEl = document.createElement('div');
+    toastEl.className = 'toast align-items-center text-bg-' + (type === 'success' ? 'success' : 'danger') + ' border-0';
+    toastEl.setAttribute('role','alert');
+    toastEl.setAttribute('aria-live','assertive');
+    toastEl.setAttribute('aria-atomic','true');
+    toastEl.innerHTML = '<div class="d-flex"><div class="toast-body">' + message + '</div>' +
+      '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>';
+    toastArea.appendChild(toastEl);
+    var bsToast = new bootstrap.Toast(toastEl, {delay: 4000});
+    bsToast.show();
+    toastEl.addEventListener('hidden.bs.toast', function() { toastEl.remove(); });
+  }
+
+  // Ensure a hidden input named `action` exists so we can preserve which button
+  // the user clicked when JS submits the form programmatically.
+  var actionInput = form.querySelector('input[name="action"]');
+  if (!actionInput) {
+    actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.id = 'action-input';
+    form.appendChild(actionInput);
+  }
+
+  // When header/footer buttons are clicked, write their value into the hidden input.
+  var actionButtons = document.querySelectorAll('button[form="company-form"][name="action"]');
+  actionButtons.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      actionInput.value = btn.value;
+    });
+  });
+
+  // Collect server-side messages and per-field errors, then show a single consolidated toast
+  var serverMessages = [];
+  var alerts = document.querySelectorAll('.alert');
+  alerts.forEach(function(alert) {
+    var text = alert.textContent.trim();
+    if (text) {
+      var tag = alert.classList.contains('alert-success') ? 'success' : 'danger';
+      serverMessages.push({text: text, tag: tag});
+    }
+    alert.remove();
+  });
+
+  var fieldErrorTexts = [];
+  var fieldErrors = document.querySelectorAll('.invalid-feedback.d-block');
+  fieldErrors.forEach(function(fe) {
+    var text = fe.textContent.trim();
+    if (text) fieldErrorTexts.push(text);
+    fe.remove();
+  });
+
+  // If generic server message exists like "Please correct the errors below." and we have
+  // specific field errors, omit the generic message to avoid duplication.
+  if (fieldErrorTexts.length) {
+    serverMessages = serverMessages.filter(function(m){
+      return !/please correct the errors/i.test(m.text);
+    });
+  }
+
+  var combined = [];
+  serverMessages.forEach(function(m){ combined.push(m.text); });
+  fieldErrorTexts.forEach(function(t){ combined.push(t); });
+  // dedupe
+  combined = combined.filter(function(v,i,a){ return a.indexOf(v) === i; });
+
+  if (combined.length) {
+    var severity = (serverMessages.some(function(m){ return m.tag === 'danger'; }) || fieldErrorTexts.length) ? 'danger' : 'success';
+    var messageHtml = '';
+    if (combined.length === 1) {
+      messageHtml = combined[0];
+    } else {
+      messageHtml = '<ul class="mb-0">';
+      combined.forEach(function(s){ messageHtml += '<li>' + s + '</li>'; });
+      messageHtml += '</ul>';
+    }
+    showToast(messageHtml, severity);
+  }
+
+  // Client-side custom validation (prevents native browser tooltip)
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    // If submission wasn't triggered by a button (e.g., Enter key), default to publish
+    if (!actionInput.value || actionInput.value.trim() === '') {
+      actionInput.value = 'publish';
+    }
+    var errors = [];
+    var firstInvalid = null;
+
+    var name = form.querySelector('[name="name"]');
+    if (!name || !name.value.trim()) {
+      errors.push('Company name is required.');
+      firstInvalid = firstInvalid || name;
+    }
+
+    var code = form.querySelector('[name="code"]');
+    if (!code || !code.value.trim()) {
+      errors.push('Company code is required.');
+      firstInvalid = firstInvalid || code;
+    } else if (code.value.length > 50) {
+      errors.push('Company code must be 50 characters or less.');
+      firstInvalid = firstInvalid || code;
+    }
+
+    if (errors.length) {
+      // Show a single combined toast for all client-side validation errors
+      var uniqueErrors = errors.filter(function(v,i,a){ return a.indexOf(v) === i; });
+      var messageHtml = '';
+      if (uniqueErrors.length === 1) {
+        messageHtml = uniqueErrors[0];
+      } else {
+        messageHtml = '<ul class="mb-0">' + uniqueErrors.map(function(s){ return '<li>' + s + '</li>'; }).join('') + '</ul>';
+      }
+      showToast(messageHtml, 'danger');
+      if (firstInvalid) firstInvalid.focus();
+      return false;
+    }
+
+    // No client-side errors — submit the form
+    form.submit();
+  });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var select = document.getElementById('locations');
+  if (!select) return;
+  var choicesInstance = null;
+  if (typeof Choices !== 'undefined') {
+    choicesInstance = new Choices(select, {
+      removeItemButton: true,
+      placeholderValue: 'Select locations',
+      shouldSort: false,
+      searchPlaceholderValue: 'Search locations'
+    });
+    try { select.choicesInstance = choicesInstance; } catch(e) { window['choicesInstance_locations'] = choicesInstance; }
+  }
+
+  function selectAllChoicesById(id){
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var inst = sel.choicesInstance || window['choicesInstance_' + id];
+    var values = Array.from(sel.options).filter(function(opt){ return !opt.disabled && opt.value !== ''; }).map(function(opt){ return opt.value; });
+    if (inst && typeof inst.setChoiceByValue === 'function') {
+      inst.setChoiceByValue(values);
+    } else {
+      var opts = sel.options;
+      for(var i=0;i<opts.length;i++){ if(values.indexOf(opts[i].value)!==-1) opts[i].selected = true; }
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  function unselectAllChoicesById(id){
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var inst = sel.choicesInstance || window['choicesInstance_' + id];
+    if (inst && typeof inst.removeActiveItems === 'function') {
+      inst.removeActiveItems();
+    } else {
+      Array.from(sel.options).forEach(function(opt){ opt.selected = false; });
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  document.querySelectorAll('.choices-select-all').forEach(function(btn){ btn.addEventListener('click', function(){ var id = btn.getAttribute('data-target'); selectAllChoicesById(id); }); });
+  document.querySelectorAll('.choices-unselect-all').forEach(function(btn){ btn.addEventListener('click', function(){ var id = btn.getAttribute('data-target'); unselectAllChoicesById(id); }); });
+});
+</script>
+
+{% endblock content %}

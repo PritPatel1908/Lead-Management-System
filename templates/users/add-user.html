@@ -1,0 +1,354 @@
+{% extends 'components/base.html' %}
+
+{% load static %}
+{% block content %}
+<nav class="mb-3" style="--falcon-breadcrumb-divider: '»';" aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'user_list' %}">Users</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if user_obj %}Edit User{% else %}Add New User{% endif %}</li>
+  </ol>
+</nav>
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row flex-between-center">
+      <div class="col-md">
+        <h5 class="mb-2 mb-md-0">{% if user_obj %}Edit user{% else %}Add a user{% endif %}</h5>
+      </div>
+      <div class="col-auto">
+        <a class="btn btn-falcon-default me-3 fw-medium" href="{% url 'user_list' %}" role="button">Back</a>
+        <button form="user-form" type="submit" name="action" value="draft" class="btn btn-primary">Draft user</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="row g-0">
+  <div class="col-lg-12 pe-lg-2">
+    <div class="card mb-3">
+      <div class="card-header bg-body-tertiary">
+        <h6 class="mb-0">Basic information</h6>
+      </div>
+      <div class="card-body">
+        <form id="user-form" method="post" action="{% if user_obj %}{% url 'edit_user' %}{% else %}{% url 'add_user' %}{% endif %}" novalidate>
+          {% csrf_token %}
+          {% if user_obj %}<input type="hidden" name="id" value="{{ user_obj.id }}">{% endif %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+          <div class="row gx-2" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; ">
+            <div class="col-md-3 mb-3">
+              <label class="form-label" for="id_username">Username:</label>
+              {{ form.username }}
+              {% for error in form.username.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-md-3 mb-3">
+              <label class="form-label" for="id_first_name">First name:</label>
+              {{ form.first_name }}
+              {% for error in form.first_name.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-md-3 mb-3">
+              <label class="form-label" for="id_middle_name">Middle name:</label>
+              {{ form.middle_name }}
+              {% for error in form.middle_name.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-md-3 mb-3">
+              <label class="form-label" for="id_last_name">Last name:</label>
+              {{ form.last_name }}
+              {% for error in form.last_name.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="row gx-2" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; ">
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="id_email">Email:</label>
+              {{ form.email }}
+              {% for error in form.email.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="id_phone">Phone:</label>
+              {{ form.phone }}
+              {% for error in form.phone.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="id_password1">Password:</label>
+              {{ form.password1 }}
+              {% for error in form.password1.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="id_password2">Confirm password:</label>
+              {{ form.password2 }}
+              {% for error in form.password2.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="row gx-2" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; ">
+            <div class="col-md-6 mb-3">
+              <label class="form-label d-flex align-items-center" for="locations">Locations:
+                <div class="ms-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary choices-select-all" data-target="locations">Select all</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ms-1 choices-unselect-all" data-target="locations">Unselect all</button>
+                </div>
+              </label>
+              {{ form.locations }}
+              {% for error in form.locations.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="col-md-6 mb-3">
+              <label class="form-label d-flex align-items-center" for="companies">Companies:
+                <div class="ms-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary choices-select-all" data-target="companies">Select all</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ms-1 choices-unselect-all" data-target="companies">Unselect all</button>
+                </div>
+              </label>
+              {{ form.companies }}
+              {% for error in form.companies.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="row gx-2" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; ">
+            <div class="col-md-12 mb-3">
+              <label class="form-label" for="id_status">Status:</label>
+              {{ form.status }}
+              {% for error in form.status.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="card mt-3">
+  <div class="card-body">
+    <div class="row justify-content-between align-items-center">
+      <div class="col-md">
+        <h5 class="mb-2 mb-md-0">You're almost done!</h5>
+      </div>
+      <div class="col-auto">
+        <a class="btn btn-link text-secondary p-0 me-3 fw-medium" href="{% url 'user_list' %}" role="button">Back</a>
+        <button form="user-form" type="submit" name="action" value="publish" class="btn btn-primary">{% if user_obj %}Update user{% else %}Add user{% endif %}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast + client validation -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var form = document.getElementById('user-form');
+  if (!form) return;
+
+  var toastArea = document.createElement('div');
+  toastArea.setAttribute('aria-live','polite');
+  toastArea.setAttribute('aria-atomic','true');
+  toastArea.style.position = 'fixed';
+  toastArea.style.top = '1rem';
+  toastArea.style.right = '1rem';
+  toastArea.style.zIndex = '1080';
+  toastArea.id = 'toast-area';
+  document.body.appendChild(toastArea);
+
+  function showToast(message, type) {
+    type = type || 'danger';
+    var toastEl = document.createElement('div');
+    toastEl.className = 'toast align-items-center text-bg-' + (type === 'success' ? 'success' : 'danger') + ' border-0';
+    toastEl.setAttribute('role','alert');
+    toastEl.setAttribute('aria-live','assertive');
+    toastEl.setAttribute('aria-atomic','true');
+    toastEl.innerHTML = '<div class="d-flex"><div class="toast-body">' + message + '</div>' +
+      '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>';
+    toastArea.appendChild(toastEl);
+    var bsToast = new bootstrap.Toast(toastEl, {delay: 4000});
+    bsToast.show();
+    toastEl.addEventListener('hidden.bs.toast', function() { toastEl.remove(); });
+  }
+
+  var actionInput = form.querySelector('input[name="action"]');
+  if (!actionInput) {
+    actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.id = 'action-input';
+    form.appendChild(actionInput);
+  }
+
+  var actionButtons = document.querySelectorAll('button[form="user-form"][name="action"]');
+  actionButtons.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      actionInput.value = btn.value;
+    });
+  });
+
+  var serverMessages = [];
+  var alerts = document.querySelectorAll('.alert');
+  alerts.forEach(function(alert) {
+    var text = alert.textContent.trim();
+    if (text) {
+      var tag = alert.classList.contains('alert-success') ? 'success' : 'danger';
+      serverMessages.push({text: text, tag: tag});
+    }
+    alert.remove();
+  });
+
+  var fieldErrorTexts = [];
+  var fieldErrors = document.querySelectorAll('.invalid-feedback.d-block');
+  fieldErrors.forEach(function(fe) {
+    var text = fe.textContent.trim();
+    if (text) fieldErrorTexts.push(text);
+    fe.remove();
+  });
+
+  if (fieldErrorTexts.length) {
+    serverMessages = serverMessages.filter(function(m){
+      return !/please correct the errors/i.test(m.text);
+    });
+  }
+
+  var combined = [];
+  serverMessages.forEach(function(m){ combined.push(m.text); });
+  fieldErrorTexts.forEach(function(t){ combined.push(t); });
+  combined = combined.filter(function(v,i,a){ return a.indexOf(v) === i; });
+
+  if (combined.length) {
+    var severity = (serverMessages.some(function(m){ return m.tag === 'danger'; }) || fieldErrorTexts.length) ? 'danger' : 'success';
+    var messageHtml = '';
+    if (combined.length === 1) {
+      messageHtml = combined[0];
+    } else {
+      messageHtml = '<ul class="mb-0">';
+      combined.forEach(function(s){ messageHtml += '<li>' + s + '</li>'; });
+      messageHtml += '</ul>';
+    }
+    showToast(messageHtml, severity);
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (!actionInput.value || actionInput.value.trim() === '') {
+      actionInput.value = 'publish';
+    }
+    var errors = [];
+    var firstInvalid = null;
+
+    var username = form.querySelector('[name="username"]');
+    if (!username || !username.value.trim()) {
+      errors.push('Username is required.');
+      firstInvalid = firstInvalid || username;
+    }
+
+    var email = form.querySelector('[name="email"]');
+    if (!email || !email.value.trim()) {
+      errors.push('Email is required.');
+      firstInvalid = firstInvalid || email;
+    }
+
+    // For new users, validate passwords
+    {% if not user_obj %}
+    var pw1 = form.querySelector('[name="password1"]');
+    var pw2 = form.querySelector('[name="password2"]');
+    if (!pw1 || !pw1.value) {
+      errors.push('Password is required.');
+      firstInvalid = firstInvalid || pw1;
+    }
+    if (pw1 && pw2 && pw1.value !== pw2.value) {
+      errors.push('Passwords do not match.');
+      firstInvalid = firstInvalid || pw2;
+    }
+    {% endif %}
+
+    if (errors.length) {
+      var uniqueErrors = errors.filter(function(v,i,a){ return a.indexOf(v) === i; });
+      var messageHtml = '';
+      if (uniqueErrors.length === 1) {
+        messageHtml = uniqueErrors[0];
+      } else {
+        messageHtml = '<ul class="mb-0">' + uniqueErrors.map(function(s){ return '<li>' + s + '</li>'; }).join('') + '</ul>';
+      }
+      showToast(messageHtml, 'danger');
+      if (firstInvalid) firstInvalid.focus();
+      return false;
+    }
+
+    form.submit();
+  });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  ['locations','companies'].forEach(function(selectId){
+    var select = document.getElementById(selectId);
+    if (!select) return;
+    var choicesInstance = null;
+    if (typeof Choices !== 'undefined') {
+      var placeholder = selectId === 'locations' ? 'Select locations' : 'Select companies';
+      choicesInstance = new Choices(select, {
+        removeItemButton: true,
+        placeholderValue: placeholder,
+        shouldSort: false,
+        searchPlaceholderValue: 'Search'
+      });
+      try { select.choicesInstance = choicesInstance; } catch(e) { window['choicesInstance_' + selectId] = choicesInstance; }
+    }
+  });
+
+  function selectAllChoicesById(id){
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var inst = sel.choicesInstance || window['choicesInstance_' + id];
+    var values = Array.from(sel.options).filter(function(opt){ return !opt.disabled && opt.value !== ''; }).map(function(opt){ return opt.value; });
+    if (inst && typeof inst.setChoiceByValue === 'function') {
+      inst.setChoiceByValue(values);
+    } else {
+      var opts = sel.options;
+      for(var i=0;i<opts.length;i++){ if(values.indexOf(opts[i].value)!==-1) opts[i].selected = true; }
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  function unselectAllChoicesById(id){
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var inst = sel.choicesInstance || window['choicesInstance_' + id];
+    if (inst && typeof inst.removeActiveItems === 'function') {
+      inst.removeActiveItems();
+    } else {
+      Array.from(sel.options).forEach(function(opt){ opt.selected = false; });
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  document.querySelectorAll('.choices-select-all').forEach(function(btn){ btn.addEventListener('click', function(){ var id = btn.getAttribute('data-target'); selectAllChoicesById(id); }); });
+  document.querySelectorAll('.choices-unselect-all').forEach(function(btn){ btn.addEventListener('click', function(){ var id = btn.getAttribute('data-target'); unselectAllChoicesById(id); }); });
+});
+</script>
+
+{% endblock content %}

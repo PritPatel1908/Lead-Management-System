@@ -1,0 +1,319 @@
+{% extends 'components/base.html' %}
+
+{% load static %}
+{% block content %}
+<nav class="mb-3" style="--falcon-breadcrumb-divider: '»';" aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{% url 'dashboard' %}">Dashboard</a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{% url 'partner_list' %}">Partners</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">All Partners</li>
+    </ol>
+</nav>
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+<div class="row gx-3">
+    <div class="col-xxl-12 col-xl-12">
+        <div class="card" id="ticketsTable" data-list='{"valueNames":["name","relation","status","companies","email","phone","created"],"searchColumns":["name","relation","status","companies","email"],"page":11,"pagination":true,"fallback":"tickets-table-fallback"}'>
+            <div class="card-header border-bottom border-200 px-0">
+                <div class="d-lg-flex justify-content-between">
+                    <div class="row flex-between-center gy-2 px-x1">
+                        <div class="col-auto pe-0">
+                        <h6 class="mb-0">All partners</h6>
+                        </div>
+                        <div class="col-auto">
+                        <form>
+                            <div class="input-group input-search-width"><input
+                                class="form-control form-control-sm shadow-none search" type="search" placeholder="Search by name or email"
+                                aria-label="search" /><button
+                                class="btn btn-sm btn-outline-secondary border-300 hover-border-secondary"><span
+                                class="fa fa-search fs-10"></span></button></div>
+                        </form>
+                        </div>
+                    </div>
+                    <div class="border-bottom border-200 my-3"></div>
+                    <div class="d-flex align-items-center justify-content-between justify-content-lg-end px-x1">
+                        <div class="d-flex align-items-center" id="table-ticket-replace-element">
+                            <a href="{% url 'add_partner' %}" class="btn btn-falcon-default btn-sm mx-2" role="button">
+                                <span class="fas fa-plus" data-fa-transform="shrink-3"></span> New Partner
+                                <span class="d-none d-sm-inline-block d-xl-none d-xxl-inline-block ms-1">New</span>
+                            </a>
+                            <div class="btn-group ms-1">
+                                <button class="btn btn-falcon-default btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span class="fas fa-external-link-alt" data-fa-transform="shrink-3"></span>
+                                    <span class="d-none d-sm-inline-block d-xl-none d-xxl-inline-block ms-1">Export</span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item export-option" href="#" data-format="pdf">PDF</a></li>
+                                    <li><a class="dropdown-item export-option" href="#" data-format="txt">Text</a></li>
+                                    <li><a class="dropdown-item export-option" href="#" data-format="csv">CSV</a></li>
+                                    <li><a class="dropdown-item export-option" href="#" data-format="xlsx">Excel</a></li>
+                                </ul>
+                            </div>
+                            <div class="form-check form-switch ms-3 d-flex align-items-center">
+                                <input class="form-check-input" type="checkbox" id="show-drafts" {% if show_drafts %}checked{% endif %}>
+                                <label class="form-check-label ms-1 mb-0" for="show-drafts">Show drafts</label>
+                            </div>
+                            <div class="form-check form-switch ms-3 d-flex align-items-center">
+                                <input class="form-check-input" type="checkbox" id="show-deleted" {% if show_deleted %}checked{% endif %}>
+                                <label class="form-check-label ms-1 mb-0" for="show-deleted">Show deleted</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive scrollbar">
+                    <table class="table table-sm mb-0 fs-10 table-view-tickets">
+                        <thead class="bg-body-tertiary">
+                            <tr>
+                                <th class="py-2 fs-9 pe-2" style="width: 28px;">
+                                    <div class="form-check d-flex align-items-center">
+                                        <input class="form-check-input" id="checkbox-bulk-table-tickets-select" type="checkbox" data-bulk-select='{"body":"table-ticket-body","actions":"table-ticket-actions","replacedElement":"table-ticket-replace-element"}' />
+                                    </div>
+                                </th>
+                                <th class="text-800 sort align-middle" data-sort="name" style="min-width:15.625rem">Name</th>
+                                <th class="text-800 sort align-middle" data-sort="relation">Relation</th>
+                                <th class="text-800 sort align-middle" data-sort="status">Status</th>
+                                <th class="text-800 sort align-middle" data-sort="companies">Companies</th>
+                                <th class="text-800 sort align-middle" data-sort="email">Email</th>
+                                <th class="text-800 sort align-middle" data-sort="phone">Phone</th>
+                                <th class="text-800 sort align-middle text-end" data-sort="created">Created</th>
+                                <th class="text-800 align-middle text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="list" id="table-ticket-body">
+                            {% if partners %}
+                                {% for partner in partners %}
+                                    <tr>
+                                        <td class="align-middle fs-9 py-3">
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="checkbox" id="table-view-partner-{{ forloop.counter }}" data-bulk-select-row="data-bulk-select-row" />
+                                            </div>
+                                        </td>
+                                        <td class="align-middle name py-2 pe-4"> 
+                                            <div class="d-flex align-items-center gap-2 position-relative">
+                                                <h6 class="mb-0"><a class="stretched-link text-900" href="{% url 'partner_detail' %}?id={{ partner.id }}">{{ partner.name }}</a></h6>
+                                            </div>
+                                        </td>
+                                        <td class="align-middle relation py-2">{{ partner.get_relation_display }}</td>
+                                        <td class="align-middle status fs-9 pe-4">
+                                            {% if partner.status == 'active' %}
+                                                <small class="badge rounded badge-subtle-success">Active</small>
+                                            {% else %}
+                                                <small class="badge rounded badge-subtle-secondary">Inactive</small>
+                                            {% endif %}
+                                        </td>
+                                        <td class="align-middle companies py-2">{% if partner.companies.all %}{% for comp in partner.companies.all %}{{ comp.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}—{% endif %}</td>
+                                        <td class="align-middle email py-2">{% if partner.email %}<a href="mailto:{{ partner.email }}">{{ partner.email }}</a>{% else %}—{% endif %}</td>
+                                        <td class="align-middle phone py-2">{% if partner.phone %}{{ partner.phone }}{% else %}—{% endif %}</td>
+                                        <td class="align-middle created text-end">{{ partner.created_at|date:"Y-m-d H:i" }}</td>
+                                        <td class="align-middle agent text-end">
+                                            {% if show_deleted %}
+                                                <form method="post" action="{% url 'restore_partner' %}" class="restore-partner-form" style="display:inline;" data-name="{{ partner.name|escape }}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="id" value="{{ partner.id }}" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-success ms-2">Restore</button>
+                                                </form>
+                                            {% else %}
+                                                <a class="btn btn-sm btn-outline-secondary" href="{% url 'partner_detail' %}?id={{ partner.id }}">View</a>
+                                                <a class="btn btn-sm btn-outline-primary ms-2" href="{% url 'edit_partner' %}?id={{ partner.id }}">Edit</a>
+                                                <form method="post" action="{% url 'delete_partner' %}" class="delete-partner-form" style="display:inline;" data-name="{{ partner.name|escape }}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="id" value="{{ partner.id }}" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger ms-2">Delete</button>
+                                                </form>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="9" class="text-center py-3">No partners found.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex justify-content-center">
+                    <button class="btn btn-sm btn-falcon-default me-1" type="button" title="Previous" data-list-pagination="prev">
+                        <span class="fas fa-chevron-left"></span>
+                    </button>
+                    <ul class="pagination mb-0"></ul>
+                    <button class="btn btn-sm btn-falcon-default ms-1" type="button" title="Next" data-list-pagination="next">
+                        <span class="fas fa-chevron-right"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    // Create toast area and show any server-side messages as toasts.
+    (function(){
+        var toastArea = document.getElementById('toast-area');
+        if(!toastArea){
+            toastArea = document.createElement('div');
+            toastArea.setAttribute('aria-live','polite');
+            toastArea.setAttribute('aria-atomic','true');
+            toastArea.style.position = 'fixed';
+            toastArea.style.top = '1rem';
+            toastArea.style.right = '1rem';
+            toastArea.style.zIndex = '1080';
+            toastArea.id = 'toast-area';
+            document.body.appendChild(toastArea);
+        }
+
+        function showToast(message, type){
+            type = type || 'success';
+            var toastEl = document.createElement('div');
+            toastEl.className = 'toast align-items-center text-bg-' + (type === 'success' ? 'success' : 'danger') + ' border-0';
+            toastEl.setAttribute('role','alert');
+            toastEl.setAttribute('aria-live','assertive');
+            toastEl.setAttribute('aria-atomic','true');
+            toastEl.innerHTML = '<div class="d-flex"><div class="toast-body">' + message + '</div>' +
+                '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>';
+            toastArea.appendChild(toastEl);
+            try{ var bsToast = new bootstrap.Toast(toastEl, {delay: 4000}); bsToast.show(); toastEl.addEventListener('hidden.bs.toast', function(){ toastEl.remove(); }); }
+            catch(e){ console.warn('Bootstrap toast failed:', e); setTimeout(function(){ toastEl.remove(); }, 4000); }
+        }
+
+        var alerts = document.querySelectorAll('.alert');
+        var combined = [];
+        alerts.forEach(function(alert){
+            var text = alert.textContent.trim();
+            if(text){ var tag = alert.classList.contains('alert-success') ? 'success' : 'danger'; combined.push({text: text, tag: tag}); }
+            alert.remove();
+        });
+
+        if(combined.length){
+            var severity = combined.some(function(m){ return m.tag === 'danger'; }) ? 'danger' : 'success';
+            var messageHtml = '';
+            if(combined.length === 1) messageHtml = combined[0].text;
+            else{ messageHtml = '<ul class="mb-0">'; combined.forEach(function(m){ messageHtml += '<li>' + m.text + '</li>'; }); messageHtml += '</ul>'; }
+            showToast(messageHtml, severity === 'success' ? 'success' : 'danger');
+        }
+    })();
+    // Prevent the search form from performing a full page submit — trigger List.js live search instead
+    var globalSearchForm = document.querySelector('#ticketsTable form');
+    if (globalSearchForm) {
+        globalSearchForm.addEventListener('submit', function(e){ e.preventDefault(); var input = document.querySelector('#ticketsTable .search'); if (input) input.dispatchEvent(new Event('keyup')); });
+    }
+
+    var cb = document.getElementById('show-drafts');
+    var cd = document.getElementById('show-deleted');
+    var ticketsCard = document.querySelector('#ticketsTable');
+    if(cb || cd){
+        function fetchAndReplace(url, pushState){
+            if(cb) cb.disabled = true;
+            if(cd) cd.disabled = true;
+            return fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function(response){ if(!response.ok) throw new Error('Network response was not ok'); return response.text(); })
+            .then(function(html){
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, 'text/html');
+                var newCard = doc.querySelector('#ticketsTable');
+                if(!newCard) throw new Error('Updated content not found in response');
+
+                var newTbody = newCard.querySelector('#table-ticket-body');
+                var oldTbody = ticketsCard.querySelector('#table-ticket-body');
+                if(newTbody && oldTbody) oldTbody.innerHTML = newTbody.innerHTML;
+
+                var newFooter = newCard.querySelector('.card-footer');
+                var oldFooter = ticketsCard.querySelector('.card-footer');
+                if(newFooter && oldFooter) oldFooter.innerHTML = newFooter.innerHTML;
+
+                if(typeof listInit === 'function'){
+                    try{ listInit(); }catch(e){ console.warn('listInit failed after AJAX replace', e); }
+                }
+
+                if(pushState) history.pushState({}, '', url);
+            })
+            .catch(function(err){ console.error('Failed to update partners:', err); window.location.href = url; })
+            .finally(function(){ if(cb) cb.disabled = false; if(cd) cd.disabled = false; });
+        }
+
+        if(cb){
+            cb.addEventListener('change', function(){
+                var params = new URLSearchParams(window.location.search);
+                if(cb.checked) params.set('show_drafts','1'); else params.delete('show_drafts');
+                var url = window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+                fetchAndReplace(url, true);
+            });
+        }
+
+        if(cd){
+            cd.addEventListener('change', function(){
+                var params = new URLSearchParams(window.location.search);
+                if(cd.checked) params.set('show_deleted','1'); else params.delete('show_deleted');
+                var url = window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+                fetchAndReplace(url, true);
+            });
+        }
+
+        window.addEventListener('popstate', function(){
+            var params = new URLSearchParams(window.location.search);
+            if(cb) cb.checked = params.has('show_drafts');
+            if(cd) cd.checked = params.has('show_deleted');
+            var url = window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+            fetchAndReplace(url, false);
+        });
+    }
+
+    // Export option handling (delegated) — AJAX download without page reload
+    document.addEventListener('click', function(e){
+        var el = e.target && e.target.closest ? e.target.closest('.export-option') : null;
+        if(!el) return;
+        e.preventDefault();
+        var fmt = el.getAttribute('data-format');
+
+        function ajaxDownload(url, suggestedFilename){
+            fetch(url, { headers: {'X-Requested-With': 'XMLHttpRequest'} })
+            .then(function(response){ if(!response.ok) throw new Error('Network response was not ok'); return response.blob().then(function(blob){ return {blob: blob, headers: response.headers}; }); })
+            .then(function(obj){
+                var blob = obj.blob; var headers = obj.headers; var disposition = headers.get('Content-Disposition') || headers.get('content-disposition') || ''; var filename = suggestedFilename || ('export.' + fmt);
+                var m = disposition.match(/filename\*=UTF-8''([^;\n\r]+)/);
+                if(m && m[1]) filename = decodeURIComponent(m[1]); else { m = disposition.match(/filename="?([^";]+)"?/); if(m && m[1]) filename = m[1]; }
+                var blobUrl = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = blobUrl; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(blobUrl); }, 10000);
+            })
+            .catch(function(err){ console.error('Export failed:', err); try{ showToast('Export failed','danger'); }catch(e){ alert('Export failed'); } });
+        }
+
+        if(typeof Swal === 'undefined'){
+            var params = new URLSearchParams(window.location.search); params.set('export', fmt); params.set('export_scope','all'); var url = window.location.pathname + (params.toString() ? ('?' + params.toString()) : ''); ajaxDownload(url); return;
+        }
+
+        Swal.fire({ title: 'Export data', html: 'Choose which data to export:', icon: 'question', showDenyButton: true, showCancelButton: true, confirmButtonText: 'Current page', denyButtonText: 'All data', cancelButtonText: 'Cancel' }).then(function(result){ if(result.isConfirmed || result.isDenied){ var scope = result.isConfirmed ? 'page' : 'all'; var params = new URLSearchParams(window.location.search); params.set('export', fmt); params.set('export_scope', scope); var url = window.location.pathname + (params.toString() ? ('?' + params.toString()) : ''); ajaxDownload(url); } });
+    });
+});
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+// Use event delegation so dynamically-rendered rows still trigger confirmation
+(function(){
+    document.addEventListener('submit', function(e){
+        var target = e.target;
+        var deleteForm = target.closest ? target.closest('.delete-partner-form, .delete-location-form, .delete-company-form') : (target.classList && (target.classList.contains('delete-partner-form') || target.classList.contains('delete-location-form') || target.classList.contains('delete-company-form')) ? target : null);
+        var restoreForm = target.closest ? target.closest('.restore-partner-form, .restore-location-form, .restore-company-form') : (target.classList && (target.classList.contains('restore-partner-form') || target.classList.contains('restore-location-form') || target.classList.contains('restore-company-form')) ? target : null);
+        var form = deleteForm || restoreForm;
+        if(!form) return;
+        var isDelete = form.classList && (form.classList.contains('delete-partner-form') || form.classList.contains('delete-company-form') || form.classList.contains('delete-location-form'));
+        var name = form.getAttribute('data-name') || 'this item';
+        e.preventDefault();
+        Swal.fire({ title: isDelete ? 'Delete' : 'Confirm', text: isDelete ? 'Delete "' + name + '"? This action can be undone by restoring.' : 'Restore "' + name + '"?', icon: isDelete ? 'warning' : 'question', showCancelButton: true, confirmButtonText: isDelete ? 'Delete' : 'Restore' }).then(function(result){ if(result.isConfirmed) form.submit(); });
+    });
+})();
+</script>
+
+{% endblock content %}

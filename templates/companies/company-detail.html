@@ -1,0 +1,120 @@
+{% extends 'components/base.html' %}
+
+{% load static %}
+{% block content %}
+<nav class="mb-3" style="--falcon-breadcrumb-divider: '»';" aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'company_list' %}">Companies</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Company details</li>
+  </ol>
+</nav>
+
+<style>
+.company-loc-link {
+  display: block;
+  padding: .45rem .75rem;
+  border-radius: .375rem;
+  transition: background-color .15s ease, transform .08s ease, box-shadow .15s ease;
+  cursor: pointer;
+}
+.company-loc-link:hover, .company-loc-link:focus {
+  background-color: rgba(0,0,0,0.03);
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.06);
+}
+.company-loc-link .loc-code { color: #6c757d; font-size: .9rem; }
+</style>
+
+<div class="row gx-3">
+  <div class="col-lg-8 col-12">
+    <div class="card mb-3">
+      <div class="card-header bg-body-tertiary">
+        <h6 class="mb-0">Basic information</h6>
+      </div>
+      <div class="card-body">
+        <div class="row gx-2">
+          <div class="col-6 mb-3">
+            <label class="form-label">Company name:</label>
+            <p class="form-control-plaintext">{{ company.name }}</p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Company code:</label>
+            <p class="form-control-plaintext">{{ company.code }}</p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Status:</label>
+            <p class="form-control-plaintext">
+              {% if company.status == 'active' %}
+                <small class="badge rounded badge-subtle-success">Active</small>
+              {% else %}
+                <small class="badge rounded badge-subtle-secondary">Inactive</small>
+              {% endif %}
+            </p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Draft:</label>
+            <p class="form-control-plaintext">
+              {% if company.is_draft %}
+                <small class="badge rounded badge-subtle-warning">Draft</small>
+              {% else %}
+                <small class="text-600">—</small>
+              {% endif %}
+            </p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Deleted:</label>
+            <p class="form-control-plaintext">
+              {% if company.is_deleted %}
+                <small class="badge rounded badge-subtle-danger">Deleted</small>
+              {% else %}
+                <small class="text-600">No</small>
+              {% endif %}
+            </p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Created:</label>
+            <p class="form-control-plaintext">{{ company.created_at|date:"Y-m-d H:i" }}</p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Updated:</label>
+            <p class="form-control-plaintext">{{ company.updated_at|date:"Y-m-d H:i" }}</p>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end">
+        <a class="btn btn-falcon-default me-2" href="{% url 'company_list' %}">Back</a>
+        <a class="btn btn-outline-primary" href="{% url 'edit_company' %}?id={{ company.id }}">Edit</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 col-12">
+    <div class="card mb-3">
+      <div class="card-header bg-body-tertiary">
+        <h6 class="mb-0">Locations</h6>
+      </div>
+      <div class="card-body">
+        {% if company.locations.all %}
+          <ul class="list-unstyled mb-0">
+            {% for loc in company.locations.all %}
+              <li class="mb-2">
+                <a href="{% url 'edit_location' %}?id={{ loc.id }}" class="company-loc-link text-decoration-none text-reset d-block">
+                  <div class="fw-semibold">{{ loc.name }}</div>
+                  <div class="text-600 fs-8 loc-code">{{ loc.code }}</div>
+                </a>
+              </li>
+            {% empty %}
+              <p class="mb-0">—</p>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="mb-0">—</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock content %}

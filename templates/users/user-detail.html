@@ -1,0 +1,119 @@
+{% extends 'components/base.html' %}
+
+{% load static %}
+{% block content %}
+<nav class="mb-3" style="--falcon-breadcrumb-divider: '»';" aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'user_list' %}">Users</a></li>
+    <li class="breadcrumb-item active" aria-current="page">User details</li>
+  </ol>
+</nav>
+
+<div class="row gx-3">
+  <div class="col-lg-8 col-12">
+    <div class="card mb-3">
+      <div class="card-header bg-body-tertiary">
+        <h6 class="mb-0">Basic information</h6>
+      </div>
+      <div class="card-body">
+        <div class="row gx-2">
+          <div class="col-6 mb-3">
+            <label class="form-label">Username:</label>
+            <p class="form-control-plaintext">{{ user_obj.username }}</p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Email:</label>
+            <p class="form-control-plaintext">{{ user_obj.email }}</p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Name:</label>
+            <p class="form-control-plaintext">{{ user_obj.get_full_name }}</p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Middle name:</label>
+            <p class="form-control-plaintext">{% if user_obj.profile %}{{ user_obj.profile.middle_name|default:'—' }}{% else %}—{% endif %}</p>
+          </div>
+
+          <div class="col-6 mb-3">
+            <label class="form-label">Phone:</label>
+            <p class="form-control-plaintext">{% if user_obj.profile %}{{ user_obj.profile.phone|default:'—' }}{% else %}—{% endif %}</p>
+          </div>
+
+          <div class="col-6 mb-3">
+            <label class="form-label">Locations:</label>
+            <p class="form-control-plaintext">
+              {% if user_obj.profile and user_obj.profile.locations.exists %}
+                {% for loc in user_obj.profile.locations.all %}
+                  <div><a href="{% url 'edit_location' %}?id={{ loc.id }}" class="text-decoration-none">{{ loc.name }} <small class="text-600">({{ loc.code }})</small></a></div>
+                {% endfor %}
+              {% else %}
+                —
+              {% endif %}
+            </p>
+          </div>
+
+          <div class="col-6 mb-3">
+            <label class="form-label">Companies:</label>
+            <p class="form-control-plaintext">
+              {% if user_obj.profile and user_obj.profile.companies.exists %}
+                {% for c in user_obj.profile.companies.all %}
+                  <div>{{ c.name }}</div>
+                {% endfor %}
+              {% else %}
+                —
+              {% endif %}
+            </p>
+          </div>
+
+          <div class="col-6 mb-3">
+            <label class="form-label">Status:</label>
+            <p class="form-control-plaintext">
+              {% if user_obj.is_active %}
+                <small class="badge rounded badge-subtle-success">Active</small>
+              {% else %}
+                <small class="badge rounded badge-subtle-secondary">Inactive</small>
+              {% endif %}
+            </p>
+          </div>
+
+          <div class="col-6 mb-3">
+            <label class="form-label">Draft:</label>
+            <p class="form-control-plaintext">{% if user_obj.profile and user_obj.profile.is_draft %}<small class="badge rounded badge-subtle-warning">Draft</small>{% else %}<small class="text-600">—</small>{% endif %}</p>
+          </div>
+
+          <div class="col-6 mb-3">
+            <label class="form-label">Joined:</label>
+            <p class="form-control-plaintext">{{ user_obj.date_joined|date:"Y-m-d H:i" }}</p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Last login:</label>
+            <p class="form-control-plaintext">{% if user_obj.last_login %}{{ user_obj.last_login|date:"Y-m-d H:i" }}{% else %}—{% endif %}</p>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end">
+        <a class="btn btn-falcon-default me-2" href="{% url 'user_list' %}">Back</a>
+        <a class="btn btn-outline-primary" href="{% url 'edit_user' %}?id={{ user_obj.id }}">Edit</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 col-12">
+    <div class="card mb-3">
+      <div class="card-header bg-body-tertiary">
+        <h6 class="mb-0">Meta</h6>
+      </div>
+      <div class="card-body">
+        <ul class="list-unstyled mb-0">
+          <li class="mb-2"><strong>Username:</strong> {{ user_obj.username }}</li>
+          <li class="mb-2"><strong>Email:</strong> {{ user_obj.email }}</li>
+          <li class="mb-2"><strong>Joined:</strong> {{ user_obj.date_joined|date:"Y-m-d H:i" }}</li>
+          <li class="mb-2"><strong>Profile created:</strong> {% if user_obj.profile %}{{ user_obj.profile.created_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock content %}
