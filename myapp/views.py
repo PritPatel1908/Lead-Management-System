@@ -995,6 +995,41 @@ def add_lead(request):
 			try:
 				_save_lead_billing_from_post(lead, post_data)
 			except Exception:
+				# swallow errors so lead save isn't blocked
+				pass
+
+			# Persist commission slabs associated with each LeadBilling row.
+			# Expect POST names like `commission_type_<billing_id>`; fall back to
+			# `commission_type_<lead_for>` or single `commission_type` when present.
+			try:
+				for lb in LeadBilling.objects.filter(lead=lead).order_by('id'):
+					key_id = f'commission_type_{getattr(lb, "id", "")}'
+					key_lf = f'commission_type_{(getattr(lb, "lead_for", "") or "").strip()}'
+					ct = ''
+					try:
+						ct = (post_data.get(key_id) or post_data.get(key_lf) or post_data.get('commission_type') or '')
+						ct = (ct or '').strip()
+					except Exception:
+						ct = ''
+					# find existing slab for this billing
+					slab = LeadCommissionSlab.objects.filter(lead=lead, lead_billing=lb).first()
+					if slab:
+						if ct:
+							if slab.lead_commission_type != ct:
+								slab.lead_commission_type = ct
+								slab.save()
+						# else: keep existing slab if user didn't post anything
+					else:
+						if ct:
+							# create with a sane default for credit term
+							LeadCommissionSlab.objects.create(
+								lead=lead,
+								lead_commission_type=ct,
+								lead_commission_credit_term_condition=LeadCommissionSlab.CREDIT_AFTER_BILLING,
+								lead_billing=lb
+							)
+			except Exception:
+				# swallow errors so lead save isn't blocked
 				pass
 
 			# If this was an AJAX partial save, return JSON with the lead id
@@ -1008,8 +1043,14 @@ def add_lead(request):
 					# include billing rows so client can verify what persisted
 					billing_rows = []
 					try:
-						for b in LeadBilling.objects.filter(lead=lead):
+						for b in LeadBilling.objects.filter(lead=lead).order_by('id'):
+							# include slab info when available so client can pre-select
+							try:
+								slab = LeadCommissionSlab.objects.filter(lead=lead, lead_billing=b).first()
+							except Exception:
+								slab = None
 							billing_rows.append({
+								'id': getattr(b, 'id', None),
 								'lead_for': b.lead_for,
 								'is_for_software': bool(b.is_for_software),
 								'is_peremp_wise_amount': bool(b.is_peremp_wise_amount),
@@ -1017,6 +1058,9 @@ def add_lead(request):
 								'peremp_amount': b.peremp_amount,
 								'another_amount': str(b.another_amount) if b.another_amount is not None else None,
 								'amount': str(b.amount) if b.amount is not None else None,
+								'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
+								'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+								'slab_id': getattr(slab, 'id', None) if slab else None,
 							})
 					except Exception:
 						billing_rows = []
@@ -1025,8 +1069,24 @@ def add_lead(request):
 					# best-effort: still include billing snapshot
 					billing_rows = []
 					try:
-						for b in LeadBilling.objects.filter(lead=lead):
-							billing_rows.append({'lead_for': b.lead_for, 'is_for_software': bool(b.is_for_software), 'is_peremp_wise_amount': bool(b.is_peremp_wise_amount), 'emp_count': b.emp_count, 'peremp_amount': b.peremp_amount, 'another_amount': str(b.another_amount) if b.another_amount is not None else None, 'amount': str(b.amount) if b.amount is not None else None})
+						for b in LeadBilling.objects.filter(lead=lead).order_by('id'):
+							try:
+								slab = LeadCommissionSlab.objects.filter(lead=lead, lead_billing=b).first()
+							except Exception:
+								slab = None
+							billing_rows.append({
+								'id': getattr(b, 'id', None),
+								'lead_for': b.lead_for,
+								'is_for_software': bool(b.is_for_software),
+								'is_peremp_wise_amount': bool(b.is_peremp_wise_amount),
+								'emp_count': b.emp_count,
+								'peremp_amount': b.peremp_amount,
+								'another_amount': str(b.another_amount) if b.another_amount is not None else None,
+								'amount': str(b.amount) if b.amount is not None else None,
+								'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
+								'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+								'slab_id': getattr(slab, 'id', None) if slab else None,
+							})
 					except Exception:
 						billing_rows = []
 					return JsonResponse({'ok': True, 'lead_id': lead.id, 'billing': billing_rows})
@@ -1081,6 +1141,8 @@ def add_lead(request):
 	selected_peremp_amount = 0
 	selected_emp_count = 0
 	selected_another_amount = 0
+	# selected commission type (populated from POST or existing LeadCommissionSlab)
+	selected_commission_type = ''
 	selected_is_peremp_wise_software = False
 	selected_peremp_amount_software = 0
 	selected_emp_count_software = 0
@@ -1112,6 +1174,9 @@ def add_lead(request):
 					selected_another_amount_software = request.POST.get('another_amount_software')
 				if request.POST.get('another_amount_hardware') is not None:
 					selected_another_amount_hardware = request.POST.get('another_amount_hardware')
+				# commission type posted from the commission tab
+				if request.POST.get('commission_type') is not None:
+					selected_commission_type = (request.POST.get('commission_type') or '').strip()
 			except Exception:
 				pass
 		else:
@@ -1150,9 +1215,43 @@ def add_lead(request):
 				except Exception:
 					# swallow and continue with defaults
 					pass
+					# try to derive existing selected commission type from LeadCommissionSlab rows
+					try:
+						lcs = LeadCommissionSlab.objects.filter(lead=lead)
+						if lcs:
+							first = lcs.first()
+							if first and getattr(first, 'lead_commission_type', None):
+								selected_commission_type = getattr(first, 'lead_commission_type') or ''
+					except Exception:
+						pass
 	except Exception:
 		selected_lead_for = ''
 		selected_is_peremp_wise = False
+
+	# Build billing rows for template (one slot per LeadBilling row)
+	lead_billing_rows = []
+	try:
+		if lead:
+			for lb in LeadBilling.objects.filter(lead=lead).order_by('id'):
+				try:
+					slab = LeadCommissionSlab.objects.filter(lead=lead, lead_billing=lb).first()
+				except Exception:
+					slab = None
+				lead_billing_rows.append({
+					'id': getattr(lb, 'id', None),
+					'lead_for': getattr(lb, 'lead_for', ''),
+					'is_for_software': bool(getattr(lb, 'is_for_software', False)),
+					'is_peremp': bool(getattr(lb, 'is_peremp_wise_amount', False)),
+					'emp_count': getattr(lb, 'emp_count', None),
+					'peremp_amount': getattr(lb, 'peremp_amount', None),
+					'another_amount': getattr(lb, 'another_amount', None),
+					'amount': getattr(lb, 'amount', None),
+					'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
+					'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+					'slab_id': getattr(slab, 'id', None) if slab else None,
+				})
+	except Exception:
+		lead_billing_rows = []
 
 	return render(request, 'leads/add-lead-wizard.html', {
 		'form': form,
@@ -1163,6 +1262,10 @@ def add_lead(request):
 		'lead_for_choices': LeadCommissionSlab.LEAD_FOR_CHOICES,
 		'selected_lead_for': selected_lead_for,
 		'selected_is_peremp_wise': selected_is_peremp_wise,
+		# commission choices pulled from model
+		'commission_type_choices': LeadCommissionSlab.TYPE_CHOICES,
+		'selected_commission_type': selected_commission_type,
+		'lead_billing_rows': lead_billing_rows,
 		# billing template values (populated from POST or LeadBilling rows)
 		'selected_peremp_amount': selected_peremp_amount,
 		'selected_emp_count': selected_emp_count,

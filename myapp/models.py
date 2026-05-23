@@ -304,6 +304,11 @@ class LeadCommissionSlab(models.Model):
 	lead_commission_type_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 	lead_commission_credit_term_condition_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 	commission_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+	# Optional date range for which this commission slab is active
+	commission_start_date = models.DateField(null=True, blank=True)
+	commission_end_date = models.DateField(null=True, blank=True)
+	# Optional relation to a LeadBilling record (creates `lead_billing_id` column)
+	lead_billing = models.ForeignKey('LeadBilling', null=True, blank=True, on_delete=models.SET_NULL, related_name='commission_slabs_by_billing')
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 
