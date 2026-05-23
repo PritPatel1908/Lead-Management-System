@@ -1002,6 +1002,19 @@ def add_lead(request):
 			# Expect POST names like `commission_type_<billing_id>`; fall back to
 			# `commission_type_<lead_for>` or single `commission_type` when present.
 			try:
+				from decimal import Decimal
+
+				def _parse_decimal(v):
+					if v is None:
+						return None
+					try:
+						s = str(v).strip()
+						if s == '':
+							return None
+						return Decimal(s)
+					except Exception:
+						return None
+
 				for lb in LeadBilling.objects.filter(lead=lead).order_by('id'):
 					key_id = f'commission_type_{getattr(lb, "id", "")}'
 					key_lf = f'commission_type_{(getattr(lb, "lead_for", "") or "").strip()}'
@@ -1011,23 +1024,43 @@ def add_lead(request):
 						ct = (ct or '').strip()
 					except Exception:
 						ct = ''
+
+					# commission amount keys (per-slot, per-lead_for, or generic)
+					amt_key_id = f'commission_amount_{getattr(lb, "id", "")}'
+					amt_key_lf = f'commission_amount_{(getattr(lb, "lead_for", "") or "").strip()}'
+					try:
+						amt_raw = (post_data.get(amt_key_id) or post_data.get(amt_key_lf) or post_data.get('commission_amount') or '')
+						amt_raw = (amt_raw or '').strip()
+					except Exception:
+						amt_raw = ''
+					amt_val = _parse_decimal(amt_raw)
+
 					# find existing slab for this billing
 					slab = LeadCommissionSlab.objects.filter(lead=lead, lead_billing=lb).first()
 					if slab:
+						changed = False
 						if ct:
 							if slab.lead_commission_type != ct:
 								slab.lead_commission_type = ct
-								slab.save()
-						# else: keep existing slab if user didn't post anything
+								changed = True
+						# Only set commission_amount when commission type is fix amount
+						if ct == LeadCommissionSlab.TYPE_FIX and amt_val is not None:
+							if slab.commission_amount is None or slab.commission_amount != amt_val:
+								slab.commission_amount = amt_val
+								changed = True
+						if changed:
+							slab.save()
 					else:
 						if ct:
-							# create with a sane default for credit term
-							LeadCommissionSlab.objects.create(
-								lead=lead,
-								lead_commission_type=ct,
-								lead_commission_credit_term_condition=LeadCommissionSlab.CREDIT_AFTER_BILLING,
-								lead_billing=lb
-							)
+							create_kwargs = {
+								'lead': lead,
+								'lead_commission_type': ct,
+								'lead_commission_credit_term_condition': LeadCommissionSlab.CREDIT_AFTER_BILLING,
+								'lead_billing': lb
+							}
+							if ct == LeadCommissionSlab.TYPE_FIX and amt_val is not None:
+								create_kwargs['commission_amount'] = amt_val
+							LeadCommissionSlab.objects.create(**create_kwargs)
 			except Exception:
 				# swallow errors so lead save isn't blocked
 				pass

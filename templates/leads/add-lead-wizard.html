@@ -570,12 +570,15 @@
               {% csrf_token %}
               <div class="row gx-3">
                 <div class="col-lg-9">
-                  <div id="commission-tab-content" class="mb-3" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; ">
+                  <div id="commission-tab-content" class="mb-3" style="margin-top:0.75rem; padding:0.25rem;">
                     {% if lead_billing_rows %}
                       {% for b in lead_billing_rows %}
-                        <div class="mb-3">
-                          <label class="form-label" for="commission_type_{{ b.id }}">Commission Type for {{ b.lead_for|title }}</label>
-                          <select class="form-select" name="commission_type_{{ b.id }}" id="commission_type_{{ b.id }}">
+                        <div class="mb-3" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; background:#fff;">
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-medium">Commission for {{ b.lead_for|title }}</div>
+                          </div>
+                          <label class="form-label" for="commission_type_{{ b.id }}">Commission Type</label>
+                          <select class="form-select commission-type-select" name="commission_type_{{ b.id }}" id="commission_type_{{ b.id }}">
                             <option value="">Select Commission Type</option>
                             {% if commission_type_choices %}
                               {% for val,label in commission_type_choices %}
@@ -589,28 +592,46 @@
                               <option value="every_billing">Every Billing</option>
                             {% endif %}
                           </select>
+
+                          <div class="mb-3 mt-2" id="commission_amount_wrapper_{{ b.id }}" style="{% if b.commission_amount is not None and b.commission_amount != '' %}display:block;{% elif b.commission_type == 'fix_amount' %}display:block;{% else %}display:none;{% endif %}">
+                            <label class="form-label" for="commission_amount_{{ b.id }}">Fix Amount</label>
+                            <input type="number" step="0.01" min="0" class="form-control" name="commission_amount_{{ b.id }}" id="commission_amount_{{ b.id }}" value="{% if b.commission_amount is not None %}{{ b.commission_amount }}{% endif %}" />
+                          </div>
+                          <!-- Per-slot commission summary -->
+                          <div class="mt-2" id="commission_slot_summary_{{ b.id }}">
+                            <div class="bg-light rounded-2 p-2" style="border:1px solid #eef2f6;">
+                              <div class="d-flex justify-content-between"><small class="text-muted">Commission Type</small><strong id="commission_slot_type_{{ b.id }}">{% if b.commission_type %}{% for val,label in commission_type_choices %}{% if val == b.commission_type %}{{ label }}{% endif %}{% endfor %}{% else %}-{% endif %}</strong></div>
+                              <div class="d-flex justify-content-between mt-1"><small class="text-muted">Commission Amount</small><strong id="commission_slot_amount_{{ b.id }}">{% if b.commission_amount is not None %}{{ b.commission_amount }}{% else %}--{% endif %}</strong></div>
+                            </div>
+                          </div>
                         </div>
                       {% endfor %}
                     {% else %}
-                      <label class="form-label" for="bootstrap-wizard-commission-type">Commission Type</label>
-                      <select class="form-select" name="commission_type" id="bootstrap-wizard-commission-type">
-                        <option value="">Select Commission Type</option>
-                        {% if commission_type_choices %}
-                          {% for val,label in commission_type_choices %}
-                            {% if selected_commission_type == val %}
-                              <option value="{{ val }}" selected>{{ label }}</option>
-                            {% else %}
-                              <option value="{{ val }}">{{ label }}</option>
-                            {% endif %}
-                          {% endfor %}
-                        {% else %}
-                          <option value="fix_amount">Fix Amount</option>
-                          <option value="percentage_wise">Percentage Wise</option>
-                          <option value="recurring">Recurring</option>
-                          <option value="only_for_first_billing">Only For First Billing</option>
-                          <option value="every_billing">Every Billing</option>
-                        {% endif %}
-                      </select>
+                      <div class="mb-3" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; background:#fff;">
+                        <label class="form-label" for="bootstrap-wizard-commission-type">Commission Type</label>
+                        <select class="form-select" name="commission_type" id="bootstrap-wizard-commission-type">
+                          <option value="">Select Commission Type</option>
+                          {% if commission_type_choices %}
+                            {% for val,label in commission_type_choices %}
+                              {% if selected_commission_type == val %}
+                                <option value="{{ val }}" selected>{{ label }}</option>
+                              {% else %}
+                                <option value="{{ val }}">{{ label }}</option>
+                              {% endif %}
+                            {% endfor %}
+                          {% else %}
+                            <option value="fix_amount">Fix Amount</option>
+                            <option value="percentage_wise">Percentage Wise</option>
+                            <option value="recurring">Recurring</option>
+                            <option value="only_for_first_billing">Only For First Billing</option>
+                            <option value="every_billing">Every Billing</option>
+                          {% endif %}
+                        </select>
+                        <div class="mb-3 mt-2" id="commission_amount_wrapper" style="{% if selected_commission_type == 'fix_amount' %}display:block;{% else %}display:none;{% endif %}">
+                          <label class="form-label" for="commission_amount">Fix Amount</label>
+                          <input type="number" step="0.01" min="0" class="form-control" name="commission_amount" id="commission_amount" value="" />
+                        </div>
+                      </div>
                     {% endif %}
                   </div>
                 </div>
@@ -721,6 +742,68 @@
           </ul>
         </div>
       </div>
+      <script>
+        document.addEventListener('DOMContentLoaded', function(){
+          try{
+            function updateSlotSummary(id){
+              try{
+                var sel = document.getElementById('commission_type_' + id);
+                var typeText = '-';
+                if (sel){
+                  var opt = sel.options[sel.selectedIndex];
+                  typeText = (opt && opt.text) ? opt.text : (sel.value || '-');
+                }
+                var typeEl = document.getElementById('commission_slot_type_' + id);
+                if (typeEl) typeEl.textContent = typeText;
+
+                var amtInput = document.getElementById('commission_amount_' + id);
+                var amtEl = document.getElementById('commission_slot_amount_' + id);
+                if (amtEl){
+                  var v = (amtInput && amtInput.value) ? amtInput.value : '';
+                  if (v !== null && v !== undefined && v !== ''){
+                    var n = parseFloat(v);
+                    amtEl.textContent = isNaN(n) ? v : (n.toFixed(2));
+                  } else {
+                    amtEl.textContent = (sel && sel.value === 'fix_amount') ? '0.00' : '--';
+                  }
+                }
+              }catch(e){}
+            }
+
+            // Toggle wrapper and update summary for each billing-slot commission select
+            var selects = document.querySelectorAll('.commission-type-select');
+            selects.forEach(function(sel){
+              try{
+                var id = sel.id.replace('commission_type_','');
+                sel.addEventListener('change', function(){
+                  try{
+                    var wrap = document.getElementById('commission_amount_wrapper_' + id);
+                    if (wrap) wrap.style.display = (sel.value === 'fix_amount') ? 'block' : 'none';
+                    updateSlotSummary(id);
+                  }catch(e){}
+                });
+                // amount input change
+                try{
+                  var amtInput = document.getElementById('commission_amount_' + id);
+                  if (amtInput){
+                    amtInput.addEventListener('input', function(){ updateSlotSummary(id); });
+                  }
+                }catch(e){}
+                // initialize summary visibility and values
+                try{ updateSlotSummary(id); }catch(e){}
+              }catch(e){}
+            });
+
+            // Single generic commission select
+            var single = document.getElementById('bootstrap-wizard-commission-type');
+            var singleWrap = document.getElementById('commission_amount_wrapper');
+            if (single && singleWrap){
+              single.addEventListener('change', function(){ singleWrap.style.display = (single.value === 'fix_amount') ? 'block' : 'none'; });
+              singleWrap.style.display = (single.value === 'fix_amount') ? 'block' : 'none';
+            }
+          }catch(e){}
+        });
+      </script>
       <!-- Add Client Modal -->
       <div class="modal fade" id="addClientModal" tabindex="-1" aria-labelledby="addClientModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -1481,15 +1564,30 @@ document.addEventListener('DOMContentLoaded', function() {
           var id = b.id || ('new_' + Math.random().toString(36).slice(2,8));
           var leadFor = b.lead_for || '';
           var label = 'Commission Type for ' + (leadFor ? (leadFor.charAt(0).toUpperCase() + leadFor.slice(1)) : '');
-          html += '<div class="mb-3">';
-          html += '<label class="form-label" for="commission_type_' + id + '">' + label + '</label>';
-          html += '<select class="form-select" name="commission_type_' + id + '" id="commission_type_' + id + '">';
+          html += '<div class="mb-3" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; background:#fff;">';
+          html += '<div class="d-flex justify-content-between align-items-center mb-2"><div class="fw-medium">Commission for ' + (leadFor ? (leadFor.charAt(0).toUpperCase() + leadFor.slice(1)) : '') + '</div></div>';
+          html += '<label class="form-label" for="commission_type_' + id + '">' + 'Commission Type' + '</label>';
+          html += '<select class="form-select commission-type-select" name="commission_type_' + id + '" id="commission_type_' + id + '">';
           html += '<option value="">Select Commission Type</option>';
           COMMISSION_TYPE_CHOICES.forEach(function(opt){
             var sel = (b.commission_type && b.commission_type === opt.value) ? ' selected' : '';
             html += '<option value="' + opt.value + '"' + sel + '>' + opt.label + '</option>';
           });
           html += '</select>';
+          // include fix-amount wrapper so rebuilt markup mirrors server-rendered inputs
+          var amtVal = (typeof b.commission_amount !== 'undefined' && b.commission_amount !== null) ? b.commission_amount : '';
+          html += '<div class="mb-3 mt-2" id="commission_amount_wrapper_' + id + '" style="' + ((b.commission_type === 'fix_amount') ? 'display:block;' : 'display:none;') + '">';
+          html += '<label class="form-label" for="commission_amount_' + id + '">Fix Amount</label>';
+          html += '<input type="number" step="0.01" min="0" class="form-control" name="commission_amount_' + id + '" id="commission_amount_' + id + '" value="' + String(amtVal) + '" />';
+          html += '</div>';
+          // per-slot commission summary
+          var summaryAmt = (typeof b.commission_amount !== 'undefined' && b.commission_amount !== null) ? String(b.commission_amount) : '--';
+          var summaryType = (b.commission_type ? (b.commission_type.charAt(0).toUpperCase() + b.commission_type.slice(1)) : '-');
+          html += '<div class="mt-2" id="commission_slot_summary_' + id + '">';
+          html += '<div class="bg-light rounded-2 p-2" style="border:1px solid #eef2f6;">';
+          html += '<div class="d-flex justify-content-between"><small class="text-muted">Commission Type</small><strong id="commission_slot_type_' + id + '">' + summaryType + '</strong></div>';
+          html += '<div class="d-flex justify-content-between mt-1"><small class="text-muted">Commission Amount</small><strong id="commission_slot_amount_' + id + '">' + summaryAmt + '</strong></div>';
+          html += '</div></div>';
           html += '</div>';
         });
       } else {
@@ -1502,8 +1600,51 @@ document.addEventListener('DOMContentLoaded', function() {
           html += '<option value="' + opt.value + '"' + sel + '>' + opt.label + '</option>';
         });
         html += '</select>';
+        // include generic fix-amount wrapper for single fallback
+        html += '<div class="mb-3 mt-2" id="commission_amount_wrapper" style="' + (("{{ selected_commission_type|escapejs }}" === 'fix_amount') ? 'display:block;' : 'display:none;') + '">';
+        html += '<label class="form-label" for="commission_amount">Fix Amount</label>';
+        html += '<input type="number" step="0.01" min="0" class="form-control" name="commission_amount" id="commission_amount" value="" />';
+        html += '</div>';
       }
       container.innerHTML = html;
+      // reattach change handlers to newly created commission selects so fix-amount wrappers toggle correctly
+      try{
+        var newSelects = container.querySelectorAll('.commission-type-select');
+        newSelects.forEach(function(sel){
+          try{
+            var id = sel.id.replace('commission_type_','');
+            sel.addEventListener('change', function(){
+              try{
+                var wrap = document.getElementById('commission_amount_wrapper_' + id);
+                if (wrap) wrap.style.display = (sel.value === 'fix_amount') ? 'block' : 'none';
+                // update slot summary
+                try{ var typeEl = document.getElementById('commission_slot_type_' + id); if (typeEl){ var opt = sel.options[sel.selectedIndex]; typeEl.textContent = (opt && opt.text) ? opt.text : (sel.value || '-'); } }catch(e){}
+                try{ var amtInput = document.getElementById('commission_amount_' + id); var amtEl = document.getElementById('commission_slot_amount_' + id); if (amtEl){ var v = (amtInput && amtInput.value) ? amtInput.value : ''; if (v !== ''){ var n = parseFloat(v); amtEl.textContent = isNaN(n) ? v : n.toFixed(2); } else { amtEl.textContent = (sel.value === 'fix_amount') ? '0.00' : '--'; } } }catch(e){}
+              }catch(e){}
+            });
+            // ensure initial visibility matches selected value
+            try{ var wrapInit = document.getElementById('commission_amount_wrapper_' + id); if (wrapInit) wrapInit.style.display = (sel.value === 'fix_amount') ? 'block' : 'none'; }catch(e){}
+            // attach amount input handler to update summary
+            try{
+              var amtInput = document.getElementById('commission_amount_' + id);
+              if (amtInput){
+                amtInput.addEventListener('input', function(){
+                  try{ var amtEl = document.getElementById('commission_slot_amount_' + id); if (amtEl){ var v = amtInput.value; var n = parseFloat(v); amtEl.textContent = (v !== '' ? (isNaN(n) ? v : n.toFixed(2)) : ((sel.value === 'fix_amount') ? '0.00' : '--')); } }catch(e){}
+                });
+              }
+            }catch(e){}
+            // initialize summary values
+            try{ var typeElInit = document.getElementById('commission_slot_type_' + id); if (typeElInit){ var opt = sel.options[sel.selectedIndex]; typeElInit.textContent = (opt && opt.text) ? opt.text : (sel.value || '-'); } }catch(e){}
+            try{ var amtElInit = document.getElementById('commission_slot_amount_' + id); var amtInputInit = document.getElementById('commission_amount_' + id); if (amtElInit){ var v = (amtInputInit && amtInputInit.value) ? amtInputInit.value : ''; var n = parseFloat(v); amtElInit.textContent = (v !== '' ? (isNaN(n) ? v : n.toFixed(2)) : ((sel.value === 'fix_amount') ? '0.00' : '--')); } }catch(e){}
+          }catch(e){}
+        });
+        var singleSel = document.getElementById('bootstrap-wizard-commission-type');
+        var singleWrap = document.getElementById('commission_amount_wrapper');
+        if (singleSel && singleWrap){
+          singleSel.addEventListener('change', function(){ singleWrap.style.display = (singleSel.value === 'fix_amount') ? 'block' : 'none'; });
+          singleWrap.style.display = (singleSel.value === 'fix_amount') ? 'block' : 'none';
+        }
+      }catch(e){}
       // update mirrored summary values after rebuilding
       try { if (typeof copySummaryToCommission === 'function') copySummaryToCommission(); } catch(e){}
     } catch (e) {
