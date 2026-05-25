@@ -134,6 +134,7 @@
                             <label class="form-label" for="peremp-amount">Per Emp Amount</label>
                             <input type="number" min="0" class="form-control" id="peremp-amount" name="peremp_amount" value="{{ selected_peremp_amount|default:'0' }}" />
                           </div>
+                          
                           <div id="empcount-col" class="col-md-4" style="{% if selected_is_peremp_wise %}display:block;{% else %}display:none;{% endif %}">
                             <label class="form-label" for="emp-count">Employee Count</label>
                             <input type="number" min="0" class="form-control" id="emp-count" name="emp_count" value="{{ selected_emp_count|default:'0' }}" />
@@ -141,6 +142,21 @@
                           <div id="another-col" class="{% if selected_is_peremp_wise %}col-md-4{% else %}col-md-12{% endif %}">
                             <label class="form-label" for="another-amount">Additional Amount</label>
                             <input type="number" min="0" step="0.01" class="form-control" id="another-amount" name="another_amount" value="{{ selected_another_amount|default:'0' }}" />
+                          </div>
+
+                          <!-- Billing type (single) -->
+                          <div class="col-12 mt-2">
+                            <label class="form-label" for="bill-type">Billing Type</label>
+                            <select class="form-select bill-type-select" id="bill-type" name="bill_type">
+                              <option value="">Select Billing Type</option>
+                              {% for val,label in bill_type_choices %}
+                                <option value="{{ val }}" {% if selected_bill_type == val %}selected{% endif %}>{{ label }}</option>
+                              {% endfor %}
+                            </select>
+                            <div class="mt-2" id="custome_month_wrapper" style="{% if selected_bill_type == 'custom' %}display:block;{% else %}display:none;{% endif %}">
+                              <label class="form-label" for="custome-month">Custom Months</label>
+                              <input type="number" min="1" class="form-control" id="custome-month" name="custome_month" value="{% if selected_custome_month %}{{ selected_custome_month }}{% endif %}" />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -180,6 +196,21 @@
                                 <label class="form-label" for="another-amount-sw">Additional Amount</label>
                                 <input type="number" min="0" step="0.01" class="form-control" id="another-amount-sw" name="another_amount_software" value="{{ selected_another_amount_software|default:'0' }}" />
                               </div>
+
+                              <!-- Billing type (software) -->
+                              <div class="col-12 mt-2">
+                                <label class="form-label" for="bill-type-sw">Billing Type (Software)</label>
+                                <select class="form-select bill-type-select" id="bill-type-sw" name="bill_type_software">
+                                  <option value="">Select Billing Type</option>
+                                  {% for val,label in bill_type_choices %}
+                                    <option value="{{ val }}" {% if selected_bill_type_software == val %}selected{% endif %}>{{ label }}</option>
+                                  {% endfor %}
+                                </select>
+                                <div class="mt-2" id="custome_month_wrapper_sw" style="{% if selected_bill_type_software == 'custom' %}display:block;{% else %}display:none;{% endif %}">
+                                  <label class="form-label" for="custome-month-sw">Custom Months (Software)</label>
+                                  <input type="number" min="1" class="form-control" id="custome-month-sw" name="custome_month_software" value="{% if selected_custome_month_software %}{{ selected_custome_month_software }}{% endif %}" />
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -190,6 +221,21 @@
                               <div id="another-col-hw" class="col-md-12">
                                 <label class="form-label" for="another-amount-hw">Additional Amount</label>
                                 <input type="number" min="0" step="0.01" class="form-control" id="another-amount-hw" name="another_amount_hardware" value="{{ selected_another_amount_hardware|default:'0' }}" />
+                              </div>
+
+                              <!-- Billing type (hardware) -->
+                              <div class="col-12 mt-2">
+                                <label class="form-label" for="bill-type-hw">Billing Type (Hardware)</label>
+                                <select class="form-select bill-type-select" id="bill-type-hw" name="bill_type_hardware">
+                                  <option value="">Select Billing Type</option>
+                                  {% for val,label in bill_type_choices %}
+                                    <option value="{{ val }}" {% if selected_bill_type_hardware == val %}selected{% endif %}>{{ label }}</option>
+                                  {% endfor %}
+                                </select>
+                                <div class="mt-2" id="custome_month_wrapper_hw" style="{% if selected_bill_type_hardware == 'custom' %}display:block;{% else %}display:none;{% endif %}">
+                                  <label class="form-label" for="custome-month-hw">Custom Months (Hardware)</label>
+                                  <input type="number" min="1" class="form-control" id="custome-month-hw" name="custome_month_hardware" value="{% if selected_custome_month_hardware %}{{ selected_custome_month_hardware }}{% endif %}" />
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -402,6 +448,81 @@
                                 if (dst) dst.textContent = src ? src.textContent : '';
                               }catch(e){}
                             });
+
+                            // compute percentage-based commissions and set commission_amount inputs
+                            try{
+                              var commissionSelects = document.querySelectorAll('.commission-type-select');
+                              var anyPercFound = false;
+                              commissionSelects.forEach(function(cs){
+                                try{
+                                  var cid = (cs.id || '').replace('commission_type_','');
+                                  if (!cid) return;
+                                  var isPercMode = false;
+                                  if (cs.value === 'percentage_wise'){
+                                    isPercMode = true;
+                                  } else if (cs.value === 'recurring' || cs.value === 'only_for_first_billing' || cs.value === 'every_billing') {
+                                    var tog = document.getElementById('commission_is_percentage_' + cid);
+                                    if (tog && tog.checked) isPercMode = true;
+                                  }
+                                  if (isPercMode){
+                                    anyPercFound = true;
+                                    var percentEl = document.getElementById('commission_percentage_' + cid);
+                                    var p = parseFloat(percentEl && percentEl.value) || 0;
+                                    var leadFor = cs.dataset ? cs.dataset.leadFor : '';
+                                    var lf = (leadFor || '').toLowerCase();
+                                    var tryIds = [];
+                                    if (lf.indexOf('software') !== -1 && lf.indexOf('hardware') !== -1) tryIds = ['commission-summary-sw-total','commission-summary-software-total','commission-summary-hw-total','commission-summary-hardware-total-single','commission-summary-total'];
+                                    else if (lf.indexOf('software') !== -1) tryIds = ['commission-summary-sw-total','commission-summary-software-total','commission-summary-total'];
+                                    else if (lf.indexOf('hardware') !== -1) tryIds = ['commission-summary-hw-total','commission-summary-hardware-total-single','commission-summary-total'];
+                                    else tryIds = ['commission-summary-total'];
+                                    var base = 0;
+                                    for (var ti=0; ti<tryIds.length; ti++){
+                                      var el = document.getElementById(tryIds[ti]);
+                                      if (el && (el.style.display !== 'none')){
+                                        var txt = (el.textContent || '').trim();
+                                        if (txt && txt !== '--'){
+                                          base = parseFloat(txt.replace(/,/g,'')) || 0;
+                                          break;
+                                        }
+                                      }
+                                    }
+                                    var computed = (base * p / 100) || 0;
+                                    var amtInput = document.getElementById('commission_amount_' + cid);
+                                    if (amtInput) amtInput.value = (isNaN(computed) ? '' : computed.toFixed(2));
+                                    var slotAmt = document.getElementById('commission_slot_amount_' + cid);
+                                    if (slotAmt) slotAmt.textContent = (computed != null ? Number(computed).toFixed(2) : '--');
+
+                                    // set per-slot calculation text
+                                    try{
+                                      var slotCalc = document.getElementById('commission_slot_calc_' + cid);
+                                      if (slotCalc){
+                                        slotCalc.textContent = (isNaN(base) ? '-' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2))));
+                                      }
+                                    }catch(e){}
+
+                                    // update global calc (show last computed formula)
+                                    try{
+                                      var globalCalc = document.getElementById('commission-summary-total-calc');
+                                      if (globalCalc){
+                                        globalCalc.textContent = (isNaN(base) ? '-' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2))));
+                                      }
+                                    }catch(e){}
+                                  } else {
+                                    // ensure per-slot calc is cleared when not percentage-based
+                                    try{
+                                      var slotCalc = document.getElementById('commission_slot_calc_' + cid);
+                                      if (slotCalc) slotCalc.textContent = '-';
+                                    }catch(e){}
+                                  }
+                                }catch(e){}
+                              });
+                              if (!anyPercFound){
+                                try{
+                                  var globals = ['commission-summary-sw-total-calc','commission-summary-hw-total-calc','commission-summary-software-total-calc','commission-summary-hardware-total-single-calc','commission-summary-total-calc'];
+                                  globals.forEach(function(gid){ try{ var el=document.getElementById(gid); if (el) el.textContent='-'; }catch(e){} });
+                                }catch(e){}
+                              }
+                            }catch(e){}
                           }
 
                           function toggleSections(){
@@ -578,11 +699,58 @@
                             <div class="fw-medium">Commission for {{ b.lead_for|title }}</div>
                           </div>
                           <label class="form-label" for="commission_type_{{ b.id }}">Commission Type</label>
-                          <select class="form-select commission-type-select" name="commission_type_{{ b.id }}" id="commission_type_{{ b.id }}">
+                          <div class="d-flex align-items-center">
+                            <select class="form-select commission-type-select flex-grow-1" name="commission_type_{{ b.id }}" id="commission_type_{{ b.id }}" data-lead-for="{{ b.lead_for }}">
+                              <option value="">Select Commission Type</option>
+                              {% if commission_type_choices %}
+                                {% for val,label in commission_type_choices %}
+                                  <option value="{{ val }}" {% if b.commission_type == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                              {% else %}
+                                <option value="fix_amount">Fix Amount</option>
+                                <option value="percentage_wise">Percentage Wise</option>
+                                <option value="recurring">Recurring</option>
+                                <option value="only_for_first_billing">Only For First Billing</option>
+                                <option value="every_billing">Every Billing</option>
+                              {% endif %}
+                            </select>
+                            <div class="form-check form-switch ms-3 mb-0" id="commission_is_percentage_wrapper_{{ b.id }}" style="{% if b.commission_type == 'recurring' or b.commission_type == 'only_for_first_billing' or b.commission_type == 'every_billing' %}display:block;{% else %}display:none;{% endif %}">
+                              <input class="form-check-input commission-is-percentage-toggle" type="checkbox" id="commission_is_percentage_{{ b.id }}" name="commission_is_percentage_{{ b.id }}" {% if b.commission_type == 'percentage_wise' or b.commission_type_value %}checked{% endif %} />
+                              <label class="form-check-label mb-0 ms-2" for="commission_is_percentage_{{ b.id }}">Is Percentage Wise?</label>
+                            </div>
+                          </div>
+                          <div class="mb-3 mt-2" id="commission_amount_wrapper_{{ b.id }}" style="{% if b.commission_amount is not None and b.commission_amount != '' %}display:block;{% elif b.commission_type == 'fix_amount' %}display:block;{% else %}display:none;{% endif %}">
+                            <label class="form-label" for="commission_amount_{{ b.id }}">Fix Amount</label>
+                            <input type="number" step="0.01" min="0" class="form-control" name="commission_amount_{{ b.id }}" id="commission_amount_{{ b.id }}" value="{% if b.commission_amount is not None %}{{ b.commission_amount }}{% endif %}" />
+                          </div>
+                          <div class="mb-3 mt-2" id="commission_percentage_wrapper_{{ b.id }}" style="{% if b.commission_type == 'percentage_wise' %}display:block;{% else %}display:none;{% endif %}">
+                            <label class="form-label" for="commission_percentage_{{ b.id }}">Percentage Value (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" class="form-control commission-percentage-input" name="commission_type_value_{{ b.id }}" id="commission_percentage_{{ b.id }}" value="{% if b.commission_type_value is not None %}{{ b.commission_type_value }}{% endif %}" />
+                            <div class="form-text">Commission will be calculated from Amount Summary.</div>
+                          </div>
+                          <!-- Per-slot commission summary -->
+                          <div class="mt-2" id="commission_slot_summary_{{ b.id }}">
+                            <div class="bg-light rounded-2 p-2" style="border:1px solid #eef2f6;">
+                              <div class="d-flex justify-content-between"><small class="text-muted">Commission Type</small><strong id="commission_slot_type_{{ b.id }}">{% if b.commission_type %}{% for val,label in commission_type_choices %}{% if val == b.commission_type %}{{ label }}{% endif %}{% endfor %}{% else %}-{% endif %}</strong></div>
+                              <div class="d-flex justify-content-between mt-1"><small class="text-muted">Commission Amount</small><strong id="commission_slot_amount_{{ b.id }}">{% if b.commission_amount is not None %}{{ b.commission_amount }}{% else %}--{% endif %}</strong></div>
+                              <div class="d-flex justify-content-between mt-1"><small class="text-muted">Calculation</small><small id="commission_slot_calc_{{ b.id }}" class="text-muted">--</small></div>
+                            </div>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    {% else %}
+                      <div class="mb-3" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; background:#fff;">
+                        <label class="form-label" for="bootstrap-wizard-commission-type">Commission Type</label>
+                        <div class="d-flex align-items-center">
+                          <select class="form-select flex-grow-1" name="commission_type" id="bootstrap-wizard-commission-type">
                             <option value="">Select Commission Type</option>
                             {% if commission_type_choices %}
                               {% for val,label in commission_type_choices %}
-                                <option value="{{ val }}" {% if b.commission_type == val %}selected{% endif %}>{{ label }}</option>
+                                {% if selected_commission_type == val %}
+                                  <option value="{{ val }}" selected>{{ label }}</option>
+                                {% else %}
+                                  <option value="{{ val }}">{{ label }}</option>
+                                {% endif %}
                               {% endfor %}
                             {% else %}
                               <option value="fix_amount">Fix Amount</option>
@@ -592,44 +760,19 @@
                               <option value="every_billing">Every Billing</option>
                             {% endif %}
                           </select>
-
-                          <div class="mb-3 mt-2" id="commission_amount_wrapper_{{ b.id }}" style="{% if b.commission_amount is not None and b.commission_amount != '' %}display:block;{% elif b.commission_type == 'fix_amount' %}display:block;{% else %}display:none;{% endif %}">
-                            <label class="form-label" for="commission_amount_{{ b.id }}">Fix Amount</label>
-                            <input type="number" step="0.01" min="0" class="form-control" name="commission_amount_{{ b.id }}" id="commission_amount_{{ b.id }}" value="{% if b.commission_amount is not None %}{{ b.commission_amount }}{% endif %}" />
-                          </div>
-                          <!-- Per-slot commission summary -->
-                          <div class="mt-2" id="commission_slot_summary_{{ b.id }}">
-                            <div class="bg-light rounded-2 p-2" style="border:1px solid #eef2f6;">
-                              <div class="d-flex justify-content-between"><small class="text-muted">Commission Type</small><strong id="commission_slot_type_{{ b.id }}">{% if b.commission_type %}{% for val,label in commission_type_choices %}{% if val == b.commission_type %}{{ label }}{% endif %}{% endfor %}{% else %}-{% endif %}</strong></div>
-                              <div class="d-flex justify-content-between mt-1"><small class="text-muted">Commission Amount</small><strong id="commission_slot_amount_{{ b.id }}">{% if b.commission_amount is not None %}{{ b.commission_amount }}{% else %}--{% endif %}</strong></div>
-                            </div>
+                          <div class="form-check form-switch ms-3 mb-0" id="commission_is_percentage_wrapper" style="{% if selected_commission_type == 'recurring' or selected_commission_type == 'only_for_first_billing' or selected_commission_type == 'every_billing' %}display:block;{% else %}display:none;{% endif %}">
+                            <input class="form-check-input commission-is-percentage-toggle" type="checkbox" id="commission_is_percentage" name="commission_is_percentage" {% if selected_commission_type == 'percentage_wise' %}checked{% endif %} />
+                            <label class="form-check-label mb-0 ms-2" for="commission_is_percentage">Is Percentage Wise?</label>
                           </div>
                         </div>
-                      {% endfor %}
-                    {% else %}
-                      <div class="mb-3" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; background:#fff;">
-                        <label class="form-label" for="bootstrap-wizard-commission-type">Commission Type</label>
-                        <select class="form-select" name="commission_type" id="bootstrap-wizard-commission-type">
-                          <option value="">Select Commission Type</option>
-                          {% if commission_type_choices %}
-                            {% for val,label in commission_type_choices %}
-                              {% if selected_commission_type == val %}
-                                <option value="{{ val }}" selected>{{ label }}</option>
-                              {% else %}
-                                <option value="{{ val }}">{{ label }}</option>
-                              {% endif %}
-                            {% endfor %}
-                          {% else %}
-                            <option value="fix_amount">Fix Amount</option>
-                            <option value="percentage_wise">Percentage Wise</option>
-                            <option value="recurring">Recurring</option>
-                            <option value="only_for_first_billing">Only For First Billing</option>
-                            <option value="every_billing">Every Billing</option>
-                          {% endif %}
-                        </select>
                         <div class="mb-3 mt-2" id="commission_amount_wrapper" style="{% if selected_commission_type == 'fix_amount' %}display:block;{% else %}display:none;{% endif %}">
                           <label class="form-label" for="commission_amount">Fix Amount</label>
                           <input type="number" step="0.01" min="0" class="form-control" name="commission_amount" id="commission_amount" value="" />
+                        </div>
+                        <div class="mb-3 mt-2" id="commission_percentage_wrapper" style="{% if selected_commission_type == 'percentage_wise' %}display:block;{% else %}display:none;{% endif %}">
+                          <label class="form-label" for="commission_percentage">Percentage Value (%)</label>
+                          <input type="number" step="0.01" min="0" max="100" class="form-control" name="commission_type_value" id="commission_percentage" value="" />
+                          <div class="form-text">Commission will be calculated from Amount Summary.</div>
                         </div>
                       </div>
                     {% endif %}
@@ -661,7 +804,10 @@
                           <div class="d-flex justify-content-between mt-2" id="commission-summary-software-empcount-row"><small class="text-muted">Employee Count</small><strong id="commission-summary-software-emp-count">0</strong></div>
                           <div class="d-flex justify-content-between mt-1"><small class="text-muted">Additional Amount</small><strong id="commission-summary-software-another-amount">0</strong></div>
                           <hr class="my-2" />
-                          <div class="text-center"><div id="commission-summary-software-total" class="fs-5 fw-bold text-primary">--</div></div>
+                          <div class="text-center">
+                            <div id="commission-summary-software-total" class="fs-5 fw-bold text-primary">--</div>
+                            <div id="commission-summary-software-total-calc" class="text-muted small">&nbsp;</div>
+                          </div>
                         </div>
                       </div>
 
@@ -671,7 +817,10 @@
                           <div class="d-flex justify-content-between mb-2"><small class="text-muted">Lead For</small><strong id="commission-summary-hardware-lead-for">-</strong></div>
                           <div class="d-flex justify-content-between mt-1"><small class="text-muted">Additional Amount</small><strong id="commission-summary-hardware-another-amount-single">0</strong></div>
                           <hr class="my-2" />
-                          <div class="text-center"><div id="commission-summary-hardware-total-single" class="fs-5 fw-bold text-primary">--</div></div>
+                          <div class="text-center">
+                            <div id="commission-summary-hardware-total-single" class="fs-5 fw-bold text-primary">--</div>
+                            <div id="commission-summary-hardware-total-single-calc" class="text-muted small">&nbsp;</div>
+                          </div>
                         </div>
                       </div>
 
@@ -690,7 +839,10 @@
                           <div class="d-flex justify-content-between"><small class="text-muted">Employee Count</small><strong id="commission-summary-sw-emp-count">0</strong></div>
                           <div class="d-flex justify-content-between mt-1"><small class="text-muted">Additional Amount</small><strong id="commission-summary-sw-another-amount">0</strong></div>
                           <hr class="my-2" />
-                          <div class="text-center"><div id="commission-summary-sw-total" class="fs-5 fw-bold text-primary">--</div></div>
+                          <div class="text-center">
+                            <div id="commission-summary-sw-total" class="fs-5 fw-bold text-primary">--</div>
+                            <div id="commission-summary-sw-total-calc" class="text-muted small">&nbsp;</div>
+                          </div>
                         </div>
                       </div>
 
@@ -706,14 +858,20 @@
                           </div>
                           <div class="d-flex justify-content-between mt-1"><small class="text-muted">Additional Amount</small><strong id="commission-summary-hw-another-amount">0</strong></div>
                           <hr class="my-2" />
-                          <div class="text-center"><div id="commission-summary-hw-total" class="fs-5 fw-bold text-primary">--</div></div>
+                          <div class="text-center">
+                            <div id="commission-summary-hw-total" class="fs-5 fw-bold text-primary">--</div>
+                            <div id="commission-summary-hw-total-calc" class="text-muted small">&nbsp;</div>
+                          </div>
                         </div>
                       </div>
 
                       <hr />
-                      <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-muted">Total Amount</small>
-                        <div id="commission-summary-total" class="fs-4 fw-bold text-primary">--</div>
+                      <div class="d-flex flex-column align-items-start">
+                        <div class="d-flex justify-content-between w-100 align-items-center">
+                          <small class="text-muted">Total Amount</small>
+                          <div id="commission-summary-total" class="fs-4 fw-bold text-primary">--</div>
+                        </div>
+                        <div id="commission-summary-total-calc" class="text-muted small mt-1">&nbsp;</div>
                       </div>
                     </div>
                   </div>
@@ -770,6 +928,88 @@
               }catch(e){}
             }
 
+            // helper to get base amount for a given lead_for value
+            function getBaseForLeadFor(leadFor){
+              var lf = ('' + (leadFor || '')).toLowerCase();
+              var tryIds = [];
+              if (lf.indexOf('software') !== -1 && lf.indexOf('hardware') !== -1) tryIds = ['commission-summary-sw-total','commission-summary-software-total','commission-summary-hw-total','commission-summary-hardware-total-single','commission-summary-total'];
+              else if (lf.indexOf('software') !== -1) tryIds = ['commission-summary-sw-total','commission-summary-software-total','commission-summary-total'];
+              else if (lf.indexOf('hardware') !== -1) tryIds = ['commission-summary-hw-total','commission-summary-hardware-total-single','commission-summary-total'];
+              else tryIds = ['commission-summary-total'];
+              for (var i=0;i<tryIds.length;i++){
+                var el = document.getElementById(tryIds[i]);
+                if (el && (el.style.display !== 'none')){
+                  var txt = (el.textContent || '').trim();
+                  if (txt && txt !== '--') return parseFloat(txt.replace(/,/g,'')) || 0;
+                }
+              }
+              var elAll = document.getElementById('commission-summary-total');
+              return elAll ? (parseFloat((elAll.textContent||'').replace(/,/g,'')) || 0) : 0;
+            }
+
+            function computeCommissionForSlot(id){
+              try{
+                var sel = document.getElementById('commission_type_' + id);
+                if (!sel) return;
+                var isPerc = false;
+                if (sel.value === 'percentage_wise') isPerc = true;
+                else if (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing'){
+                  var tog = document.getElementById('commission_is_percentage_' + id);
+                  if (tog && tog.checked) isPerc = true;
+                }
+                if (!isPerc) {
+                  try{
+                    var slotCalc = document.getElementById('commission_slot_calc_' + id);
+                    if (slotCalc) slotCalc.textContent = '-';
+                  }catch(e){}
+                  try{
+                    if (!anyPercentageActive()){
+                      var globals = ['commission-summary-sw-total-calc','commission-summary-hw-total-calc','commission-summary-software-total-calc','commission-summary-hardware-total-single-calc','commission-summary-total-calc'];
+                      globals.forEach(function(gid){ try{ var el=document.getElementById(gid); if (el) el.textContent='-'; }catch(e){} });
+                    }
+                  }catch(e){}
+                  return;
+                }
+                var percentEl = document.getElementById('commission_percentage_' + id);
+                var p = parseFloat(percentEl && percentEl.value) || 0;
+                var leadFor = sel.dataset ? sel.dataset.leadFor : null;
+                var base = getBaseForLeadFor(leadFor);
+                var computed = (base * p / 100) || 0;
+                var amtInput = document.getElementById('commission_amount_' + id);
+                if (amtInput) amtInput.value = (isNaN(computed) ? '' : computed.toFixed(2));
+                var slotAmt = document.getElementById('commission_slot_amount_' + id);
+                if (slotAmt) slotAmt.textContent = (computed != null ? Number(computed).toFixed(2) : '--');
+                // show calculation under slot summary
+                try{
+                  var slotCalc = document.getElementById('commission_slot_calc_' + id);
+                  if (slotCalc){
+                    slotCalc.textContent = (isNaN(base) ? '-' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2))));
+                  }
+                }catch(e){}
+                
+                // also update global commission summary calc (small helper)
+                try{
+                  var globalCalc = document.getElementById('commission-summary-total-calc');
+                  if (globalCalc){
+                    globalCalc.textContent = (isNaN(base) ? '-' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2))));
+                  }
+                }catch(e){}
+              }catch(e){}
+            }
+
+            function anyPercentageActive(){
+              try{
+                var sels = document.querySelectorAll('.commission-type-select');
+                for (var i=0;i<sels.length;i++){ try{ if (sels[i] && sels[i].value === 'percentage_wise') return true; }catch(e){} }
+                var singleSel = document.getElementById('bootstrap-wizard-commission-type');
+                if (singleSel && singleSel.value === 'percentage_wise') return true;
+                // also check any per-slot toggles
+                var toggles = document.querySelectorAll('.commission-is-percentage-toggle');
+                for (var t=0;t<toggles.length;t++){ try{ if (toggles[t] && toggles[t].checked) return true; }catch(e){} }
+              }catch(e){}
+              return false;
+            }
+
             // Toggle wrapper and update summary for each billing-slot commission select
             var selects = document.querySelectorAll('.commission-type-select');
             selects.forEach(function(sel){
@@ -778,7 +1018,35 @@
                 sel.addEventListener('change', function(){
                   try{
                     var wrap = document.getElementById('commission_amount_wrapper_' + id);
-                    if (wrap) wrap.style.display = (sel.value === 'fix_amount') ? 'block' : 'none';
+                    var pwrap = document.getElementById('commission_percentage_wrapper_' + id);
+
+                    // show/hide the new per-slot percentage switch when appropriate
+                    var toggleWrapper = document.getElementById('commission_is_percentage_wrapper_' + id);
+                    var toggleEl = document.getElementById('commission_is_percentage_' + id);
+                    var isRecurringLike = (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing');
+                    if (toggleWrapper){
+                      if (isRecurringLike) toggleWrapper.style.display = 'block';
+                      else { toggleWrapper.style.display = 'none'; if (toggleEl) toggleEl.checked = false; }
+                    }
+
+                    // Decide which input to show: fix amount when explicit or when recurring-type with toggle OFF
+                    var showFix = (sel.value === 'fix_amount') || (isRecurringLike && toggleEl && !toggleEl.checked);
+                    var showPerc = (sel.value === 'percentage_wise') || (isRecurringLike && toggleEl && toggleEl.checked);
+                    if (wrap) wrap.style.display = showFix ? 'block' : 'none';
+                    if (pwrap) pwrap.style.display = showPerc ? 'block' : 'none';
+
+                    // compute if chosen type is percentage or recurring-type with toggle enabled
+                    if (showPerc){
+                      computeCommissionForSlot(id);
+                    } else {
+                      try{ var slotCalc = document.getElementById('commission_slot_calc_' + id); if (slotCalc) slotCalc.textContent = '-'; }catch(e){}
+                      if (!anyPercentageActive()){
+                        try{
+                          var globals = ['commission-summary-sw-total-calc','commission-summary-hw-total-calc','commission-summary-software-total-calc','commission-summary-hardware-total-single-calc','commission-summary-total-calc'];
+                          globals.forEach(function(gid){ try{ var el=document.getElementById(gid); if (el) el.textContent='-'; }catch(e){} });
+                        }catch(e){}
+                      }
+                    }
                     updateSlotSummary(id);
                   }catch(e){}
                 });
@@ -789,18 +1057,144 @@
                     amtInput.addEventListener('input', function(){ updateSlotSummary(id); });
                   }
                 }catch(e){}
-                // initialize summary visibility and values
-                try{ updateSlotSummary(id); }catch(e){}
+                // percentage input change
+                try{
+                  var percentInput = document.getElementById('commission_percentage_' + id);
+                  if (percentInput){
+                    percentInput.addEventListener('input', function(){ computeCommissionForSlot(id); updateSlotSummary(id); });
+                  }
+                }catch(e){}
+                // initialize wrapper visibility, compute percentage and update summary
+                try{
+                  var wrapInit = document.getElementById('commission_amount_wrapper_' + id);
+                  var pwrapInit = document.getElementById('commission_percentage_wrapper_' + id);
+
+                  var toggleInit = document.getElementById('commission_is_percentage_' + id);
+                  var isRecurringInit = (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing');
+
+                  // default visibility based on select and toggle state
+                  if (wrapInit) wrapInit.style.display = (sel.value === 'fix_amount') ? 'block' : 'none';
+                  if (pwrapInit) pwrapInit.style.display = (sel.value === 'percentage_wise') ? 'block' : 'none';
+
+                  if (toggleInit){
+                    if (toggleInit.checked && isRecurringInit){
+                      if (pwrapInit) pwrapInit.style.display = 'block';
+                      if (wrapInit) wrapInit.style.display = 'none';
+                      computeCommissionForSlot(id);
+                    } else if (!toggleInit.checked && isRecurringInit){
+                      if (wrapInit) wrapInit.style.display = 'block';
+                      if (pwrapInit) pwrapInit.style.display = 'none';
+                    }
+
+                    toggleInit.addEventListener('change', function(){
+                      var pwrap = document.getElementById('commission_percentage_wrapper_' + id);
+                      var w = document.getElementById('commission_amount_wrapper_' + id);
+                      var isRec = (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing');
+                      if (toggleInit.checked){ if (pwrap) pwrap.style.display = 'block'; if (w) w.style.display = 'none'; }
+                      else { if (pwrap) pwrap.style.display = 'none'; if (w) w.style.display = (sel.value === 'fix_amount' || isRec) ? 'block' : 'none'; }
+                      computeCommissionForSlot(id);
+                      updateSlotSummary(id);
+                    });
+                  }
+
+                  if (sel.value === 'percentage_wise') {
+                    computeCommissionForSlot(id);
+                  } else {
+                    try{ var slotCalcInit = document.getElementById('commission_slot_calc_'+id); if (slotCalcInit) slotCalcInit.textContent = '-'; }catch(e){}
+                  }
+                  updateSlotSummary(id);
+                }catch(e){}
               }catch(e){}
             });
 
-            // Single generic commission select
+            // Single generic commission select (also handle percentage)
             var single = document.getElementById('bootstrap-wizard-commission-type');
             var singleWrap = document.getElementById('commission_amount_wrapper');
-            if (single && singleWrap){
-              single.addEventListener('change', function(){ singleWrap.style.display = (single.value === 'fix_amount') ? 'block' : 'none'; });
-              singleWrap.style.display = (single.value === 'fix_amount') ? 'block' : 'none';
+            var pwrapSingle = document.getElementById('commission_percentage_wrapper');
+            if (single && (singleWrap || pwrapSingle)){
+              single.addEventListener('change', function(){
+                try{
+                  if (singleWrap) singleWrap.style.display = (single.value === 'fix_amount') ? 'block' : 'none';
+                  if (pwrapSingle) pwrapSingle.style.display = (single.value === 'percentage_wise') ? 'block' : 'none';
+
+                  var toggleWrapper = document.getElementById('commission_is_percentage_wrapper');
+                  var toggleEl = document.getElementById('commission_is_percentage');
+                  if (toggleWrapper){
+                    if (single.value === 'recurring' || single.value === 'only_for_first_billing' || single.value === 'every_billing') toggleWrapper.style.display = 'block';
+                    else { toggleWrapper.style.display = 'none'; if (toggleEl) toggleEl.checked = false; }
+                  }
+
+                  if (single.value === 'percentage_wise' || (toggleEl && toggleEl.checked && (single.value === 'recurring' || single.value === 'only_for_first_billing' || single.value === 'every_billing'))){
+                    var percentEl = document.getElementById('commission_percentage');
+                    var p = parseFloat(percentEl && percentEl.value) || 0;
+                    var baseEl = document.getElementById('commission-summary-total');
+                    var base = baseEl ? (parseFloat((baseEl.textContent||'').replace(/,/g,'')) || 0) : 0;
+                    var computed = (base * p / 100) || 0;
+                    var amtInput = document.getElementById('commission_amount');
+                    if (amtInput) amtInput.value = (isNaN(computed) ? '' : computed.toFixed(2));
+                    try{
+                      var globalCalc = document.getElementById('commission-summary-total-calc');
+                      if (globalCalc){
+                        globalCalc.textContent = (isNaN(base) ? '-' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2))));
+                      }
+                    }catch(e){}
+                  } else {
+                    try{ var globalCalc = document.getElementById('commission-summary-total-calc'); if (globalCalc) globalCalc.textContent = '-'; }catch(e){}
+                  }
+                }catch(e){}
+              });
+              if (singleWrap) singleWrap.style.display = (single.value === 'fix_amount') ? 'block' : 'none';
+              if (pwrapSingle) pwrapSingle.style.display = (single.value === 'percentage_wise') ? 'block' : 'none';
             }
+            // generic percentage input change
+            try{
+              var genPercent = document.getElementById('commission_percentage');
+              if (genPercent){
+                genPercent.addEventListener('input', function(){
+                  try{
+                    var singleSel = document.getElementById('bootstrap-wizard-commission-type');
+                    var singleToggle = document.getElementById('commission_is_percentage');
+                    if (!singleSel) return;
+                    if (singleSel.value !== 'percentage_wise' && !(singleToggle && singleToggle.checked && (singleSel.value === 'recurring' || singleSel.value === 'only_for_first_billing' || singleSel.value === 'every_billing'))) return;
+                    var p = parseFloat(genPercent.value) || 0;
+                    var baseEl = document.getElementById('commission-summary-total');
+                    var base = baseEl ? (parseFloat((baseEl.textContent||'').replace(/,/g,'')) || 0) : 0;
+                    var computed = (base * p / 100) || 0;
+                    var amtInput = document.getElementById('commission_amount');
+                    if (amtInput) amtInput.value = (isNaN(computed) ? '' : computed.toFixed(2));
+                    try{ var globalCalc = document.getElementById('commission-summary-total-calc'); if (globalCalc) globalCalc.textContent = (isNaN(base) ? '' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2)))); }catch(e){}
+                  }catch(e){}
+                });
+              }
+            }catch(e){}
+          }catch(e){}
+        });
+      </script>
+      <script>
+        document.addEventListener('DOMContentLoaded', function(){
+          try{
+            function handleBillTypeChange(el){
+              try{
+                var id = el.id || '';
+                // id formats: bill-type, bill-type-sw, bill-type-hw or bill_type_<id>
+                var val = (el.value || '').toLowerCase();
+                if (id.indexOf('bill_type_') === 0){
+                  var idx = id.replace('bill_type_','');
+                  var wrapper = document.getElementById('custome_month_wrapper_' + idx);
+                  if (wrapper) wrapper.style.display = (val === 'custom') ? 'block' : 'none';
+                } else if (id === 'bill-type'){
+                  var w = document.getElementById('custome_month_wrapper'); if (w) w.style.display = (val === 'custom') ? 'block' : 'none';
+                } else if (id === 'bill-type-sw'){
+                  var w = document.getElementById('custome_month_wrapper_sw'); if (w) w.style.display = (val === 'custom') ? 'block' : 'none';
+                } else if (id === 'bill-type-hw'){
+                  var w = document.getElementById('custome_month_wrapper_hw'); if (w) w.style.display = (val === 'custom') ? 'block' : 'none';
+                }
+              }catch(e){}
+            }
+            var els = document.querySelectorAll('.bill-type-select');
+            els.forEach(function(el){
+              try{ el.addEventListener('change', function(){ handleBillTypeChange(el); }); }catch(e){}
+            });
           }catch(e){}
         });
       </script>
@@ -1452,7 +1846,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Ensure common selects (by id) are included if plugin altered DOM
-    var ensureIds = ['companies','partner','sales_person','bootstrap-wizard-wizard-client-name','id_client','sales-person','bootstrap-wizard-lead-for'];
+    var ensureIds = ['companies','partner','sales_person','bootstrap-wizard-wizard-client-name','id_client','sales-person','bootstrap-wizard-lead-for',
+      // billing frequency selects and custom-month inputs (ensure values included even if plugin hides original selects)
+      'bill-type','bill_type','bill-type-sw','bill_type_software','bill-type-hw','bill_type_hardware',
+      'custome_month','custome_month_software','custome_month_hardware'
+    ];
     ensureIds.forEach(function(id){
       try {
         var el = document.getElementById(id) || document.querySelector('[name="' + id + '"]');
@@ -1567,13 +1965,27 @@ document.addEventListener('DOMContentLoaded', function() {
           html += '<div class="mb-3" style="margin-top:0.75rem; padding:0.75rem; border:1px solid #dee2e6; border-radius:0.375rem; background:#fff;">';
           html += '<div class="d-flex justify-content-between align-items-center mb-2"><div class="fw-medium">Commission for ' + (leadFor ? (leadFor.charAt(0).toUpperCase() + leadFor.slice(1)) : '') + '</div></div>';
           html += '<label class="form-label" for="commission_type_' + id + '">' + 'Commission Type' + '</label>';
-          html += '<select class="form-select commission-type-select" name="commission_type_' + id + '" id="commission_type_' + id + '">';
+          html += '<div class="d-flex align-items-center">';
+          html += '<select class="form-select commission-type-select flex-grow-1" name="commission_type_' + id + '" id="commission_type_' + id + '">';
           html += '<option value="">Select Commission Type</option>';
           COMMISSION_TYPE_CHOICES.forEach(function(opt){
             var sel = (b.commission_type && b.commission_type === opt.value) ? ' selected' : '';
             html += '<option value="' + opt.value + '"' + sel + '>' + opt.label + '</option>';
           });
           html += '</select>';
+          // add per-slot percentage toggle (for recurring / first / every billing types)
+          html += '<div class="form-check form-switch ms-3 mb-0" id="commission_is_percentage_wrapper_' + id + '" style="' + ((b.commission_type === 'recurring' || b.commission_type === 'only_for_first_billing' || b.commission_type === 'every_billing') ? 'display:block;' : 'display:none;') + '">';
+          html += '<input class="form-check-input commission-is-percentage-toggle" type="checkbox" id="commission_is_percentage_' + id + '" name="commission_is_percentage_' + id + '"' + ((b.commission_type === 'percentage_wise' || (typeof b.commission_type_value !== 'undefined' && b.commission_type_value)) ? ' checked' : '') + ' />';
+          html += '<label class="form-check-label mb-0 ms-2" for="commission_is_percentage_' + id + '">Is Percentage Wise?</label>';
+          html += '</div>';
+          html += '</div>';
+
+          // add percentage wrapper so rebuilt markup mirrors server-rendered inputs
+          html += '<div class="mb-3 mt-2" id="commission_percentage_wrapper_' + id + '" style="' + ((b.commission_type === 'percentage_wise' || (typeof b.commission_type_value !== 'undefined' && b.commission_type_value)) ? 'display:block;' : 'display:none;') + '">';
+          html += '<label class="form-label" for="commission_percentage_' + id + '">Percentage Value (%)</label>';
+          html += '<input type="number" step="0.01" min="0" max="100" class="form-control commission-percentage-input" name="commission_type_value_' + id + '" id="commission_percentage_' + id + '" value="' + ((typeof b.commission_type_value !== 'undefined' && b.commission_type_value) ? String(b.commission_type_value) : '') + '" />';
+          html += '<div class="form-text">Commission will be calculated from Amount Summary.</div>';
+          html += '</div>';
           // include fix-amount wrapper so rebuilt markup mirrors server-rendered inputs
           var amtVal = (typeof b.commission_amount !== 'undefined' && b.commission_amount !== null) ? b.commission_amount : '';
           html += '<div class="mb-3 mt-2" id="commission_amount_wrapper_' + id + '" style="' + ((b.commission_type === 'fix_amount') ? 'display:block;' : 'display:none;') + '">';
@@ -1593,13 +2005,28 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         // fallback single select
         html += '<label class="form-label" for="bootstrap-wizard-commission-type">Commission Type</label>';
-        html += '<select class="form-select" name="commission_type" id="bootstrap-wizard-commission-type">';
+        html += '<div class="d-flex align-items-center">';
+        html += '<select class="form-select flex-grow-1" name="commission_type" id="bootstrap-wizard-commission-type">';
         html += '<option value="">Select Commission Type</option>';
         COMMISSION_TYPE_CHOICES.forEach(function(opt){
           var sel = ("{{ selected_commission_type|escapejs }}" && "{{ selected_commission_type|escapejs }}" === opt.value) ? ' selected' : '';
           html += '<option value="' + opt.value + '"' + sel + '>' + opt.label + '</option>';
         });
         html += '</select>';
+        // include single-fallback toggle (for recurring / first / every billing types)
+        html += '<div class="form-check form-switch ms-3 mb-0" id="commission_is_percentage_wrapper" style="' + (("{{ selected_commission_type|escapejs }}" === 'recurring' || "{{ selected_commission_type|escapejs }}" === 'only_for_first_billing' || "{{ selected_commission_type|escapejs }}" === 'every_billing') ? 'display:block;' : 'display:none;') + '">';
+        html += '<input class="form-check-input commission-is-percentage-toggle" type="checkbox" id="commission_is_percentage" name="commission_is_percentage" ' + (("{{ selected_commission_type|escapejs }}" === 'percentage_wise') ? 'checked' : '') + ' />';
+        html += '<label class="form-check-label mb-0 ms-2" for="commission_is_percentage">Is Percentage Wise?</label>';
+        html += '</div>';
+        html += '</div>';
+
+        // include generic percentage wrapper for single fallback
+        html += '<div class="mb-3 mt-2" id="commission_percentage_wrapper" style="' + (("{{ selected_commission_type|escapejs }}" === 'percentage_wise') ? 'display:block;' : 'display:none;') + '">';
+        html += '<label class="form-label" for="commission_percentage">Percentage Value (%)</label>';
+        html += '<input type="number" step="0.01" min="0" max="100" class="form-control" name="commission_type_value" id="commission_percentage" value="" />';
+        html += '<div class="form-text">Commission will be calculated from Amount Summary.</div>';
+        html += '</div>';
+
         // include generic fix-amount wrapper for single fallback
         html += '<div class="mb-3 mt-2" id="commission_amount_wrapper" style="' + (("{{ selected_commission_type|escapejs }}" === 'fix_amount') ? 'display:block;' : 'display:none;') + '">';
         html += '<label class="form-label" for="commission_amount">Fix Amount</label>';
@@ -1607,7 +2034,7 @@ document.addEventListener('DOMContentLoaded', function() {
         html += '</div>';
       }
       container.innerHTML = html;
-      // reattach change handlers to newly created commission selects so fix-amount wrappers toggle correctly
+            // reattach change handlers to newly created commission selects so fix-amount and percentage wrappers toggle correctly
       try{
         var newSelects = container.querySelectorAll('.commission-type-select');
         newSelects.forEach(function(sel){
@@ -1616,14 +2043,61 @@ document.addEventListener('DOMContentLoaded', function() {
             sel.addEventListener('change', function(){
               try{
                 var wrap = document.getElementById('commission_amount_wrapper_' + id);
-                if (wrap) wrap.style.display = (sel.value === 'fix_amount') ? 'block' : 'none';
+                var pwrap = document.getElementById('commission_percentage_wrapper_' + id);
+
+                // show/hide toggle if necessary
+                var toggleWrapper = document.getElementById('commission_is_percentage_wrapper_' + id);
+                var toggleEl = document.getElementById('commission_is_percentage_' + id);
+                var isRec = (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing');
+                if (toggleWrapper){ toggleWrapper.style.display = isRec ? 'block' : 'none'; }
+
+                // decide visibility: show fix amount when explicit or when recurring-type with toggle OFF
+                var showFix = (sel.value === 'fix_amount') || (isRec && toggleEl && !toggleEl.checked);
+                var showPerc = (sel.value === 'percentage_wise') || (isRec && toggleEl && toggleEl.checked);
+                if (wrap) wrap.style.display = showFix ? 'block' : 'none';
+
                 // update slot summary
                 try{ var typeEl = document.getElementById('commission_slot_type_' + id); if (typeEl){ var opt = sel.options[sel.selectedIndex]; typeEl.textContent = (opt && opt.text) ? opt.text : (sel.value || '-'); } }catch(e){}
-                try{ var amtInput = document.getElementById('commission_amount_' + id); var amtEl = document.getElementById('commission_slot_amount_' + id); if (amtEl){ var v = (amtInput && amtInput.value) ? amtInput.value : ''; if (v !== ''){ var n = parseFloat(v); amtEl.textContent = isNaN(n) ? v : n.toFixed(2); } else { amtEl.textContent = (sel.value === 'fix_amount') ? '0.00' : '--'; } } }catch(e){}
+                try{ var amtInput = document.getElementById('commission_amount_' + id); var amtEl = document.getElementById('commission_slot_amount_' + id); if (amtEl){ var v = (amtInput && amtInput.value) ? amtInput.value : ''; if (v !== ''){ var n = parseFloat(v); amtEl.textContent = isNaN(n) ? v : n.toFixed(2); } else { amtEl.textContent = (showFix ? '0.00' : '--'); } } }catch(e){}
+                if (pwrap) pwrap.style.display = showPerc ? 'block' : 'none';
               }catch(e){}
             });
-            // ensure initial visibility matches selected value
-            try{ var wrapInit = document.getElementById('commission_amount_wrapper_' + id); if (wrapInit) wrapInit.style.display = (sel.value === 'fix_amount') ? 'block' : 'none'; }catch(e){}
+            // ensure initial visibility matches selected value and wire percentage/toggle handlers
+            try{
+              var wrapInit = document.getElementById('commission_amount_wrapper_' + id);
+              var pwrapInit = document.getElementById('commission_percentage_wrapper_' + id);
+              if (wrapInit) wrapInit.style.display = (sel.value === 'fix_amount') ? 'block' : 'none';
+              if (pwrapInit) pwrapInit.style.display = (sel.value === 'percentage_wise') ? 'block' : 'none';
+
+              // percentage input handler
+              try{
+                var percentInput = document.getElementById('commission_percentage_' + id);
+                if (percentInput){ percentInput.addEventListener('input', function(){ computeCommissionForSlot(id); try{ var amtEl = document.getElementById('commission_slot_amount_' + id); if (amtEl) { var v = (document.getElementById('commission_amount_' + id) && document.getElementById('commission_amount_' + id).value) ? document.getElementById('commission_amount_' + id).value : ''; } }catch(e){} updateSlotSummary(id); }); }
+              }catch(e){}
+
+              // toggle wiring for rebuilt slot
+              try{
+                var toggleWrapper = document.getElementById('commission_is_percentage_wrapper_' + id);
+                var toggleEl = document.getElementById('commission_is_percentage_' + id);
+                if (toggleWrapper){ toggleWrapper.style.display = (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing') ? 'block' : 'none'; }
+                if (toggleEl){
+                  toggleEl.addEventListener('change', function(){
+                    var pwrap = document.getElementById('commission_percentage_wrapper_' + id);
+                    var w = document.getElementById('commission_amount_wrapper_' + id);
+                    var isRecLocal = (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing');
+                    if (toggleEl.checked){ if (pwrap) pwrap.style.display = 'block'; if (w) w.style.display = 'none'; }
+                    else { if (pwrap) pwrap.style.display = 'none'; if (w) w.style.display = (sel.value === 'fix_amount' || isRecLocal) ? 'block' : 'none'; }
+                    computeCommissionForSlot(id);
+                    updateSlotSummary(id);
+                  });
+                  if (toggleEl.checked && (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing')){
+                    if (pwrapInit) pwrapInit.style.display = 'block'; if (wrapInit) wrapInit.style.display = 'none'; computeCommissionForSlot(id);
+                  } else if (!toggleEl.checked && (sel.value === 'recurring' || sel.value === 'only_for_first_billing' || sel.value === 'every_billing')){
+                    if (wrapInit) wrapInit.style.display = 'block'; if (pwrapInit) pwrapInit.style.display = 'none';
+                  }
+                }
+              }catch(e){}
+            }catch(e){}
             // attach amount input handler to update summary
             try{
               var amtInput = document.getElementById('commission_amount_' + id);
@@ -1640,9 +2114,82 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         var singleSel = document.getElementById('bootstrap-wizard-commission-type');
         var singleWrap = document.getElementById('commission_amount_wrapper');
-        if (singleSel && singleWrap){
-          singleSel.addEventListener('change', function(){ singleWrap.style.display = (singleSel.value === 'fix_amount') ? 'block' : 'none'; });
-          singleWrap.style.display = (singleSel.value === 'fix_amount') ? 'block' : 'none';
+        if (singleSel && (singleWrap || document.getElementById('commission_percentage_wrapper'))){
+          singleSel.addEventListener('change', function(){
+            try{
+              var pwrap = document.getElementById('commission_percentage_wrapper');
+              var toggleWrapper = document.getElementById('commission_is_percentage_wrapper');
+              var toggleEl = document.getElementById('commission_is_percentage');
+              var isRecurringLike = (singleSel.value === 'recurring' || singleSel.value === 'only_for_first_billing' || singleSel.value === 'every_billing');
+
+              if (toggleWrapper){ if (isRecurringLike) toggleWrapper.style.display = 'block'; else { toggleWrapper.style.display = 'none'; if (toggleEl) toggleEl.checked = false; } }
+
+              // show fix amount when explicit fix_amount or recurring type with toggle OFF
+              if (singleWrap) singleWrap.style.display = (singleSel.value === 'fix_amount' || (isRecurringLike && toggleEl && !toggleEl.checked)) ? 'block' : 'none';
+              if (pwrap) pwrap.style.display = (singleSel.value === 'percentage_wise' || (isRecurringLike && toggleEl && toggleEl.checked)) ? 'block' : 'none';
+
+              if (singleSel.value === 'percentage_wise' || (toggleEl && toggleEl.checked && isRecurringLike)){
+                var percentEl = document.getElementById('commission_percentage');
+                var p = parseFloat(percentEl && percentEl.value) || 0;
+                var baseEl = document.getElementById('commission-summary-total');
+                var base = baseEl ? (parseFloat((baseEl.textContent||'').replace(/,/g,'')) || 0) : 0;
+                var computed = (base * p / 100) || 0;
+                var amtInput = document.getElementById('commission_amount');
+                if (amtInput) amtInput.value = (isNaN(computed) ? '' : computed.toFixed(2));
+                try{ var globalCalc = document.getElementById('commission-summary-total-calc'); if (globalCalc){ globalCalc.textContent = (isNaN(base) ? '-' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2)))); } }catch(e){}
+              } else {
+                try{ var globalCalc = document.getElementById('commission-summary-total-calc'); if (globalCalc) globalCalc.textContent = '-'; }catch(e){}
+              }
+            }catch(e){}
+          });
+          singleWrap.style.display = (singleSel.value === 'fix_amount' || ( (singleSel.value === 'recurring' || singleSel.value === 'only_for_first_billing' || singleSel.value === 'every_billing') && (document.getElementById('commission_is_percentage') && !document.getElementById('commission_is_percentage').checked) )) ? 'block' : 'none';
+          var pwrapSingle = document.getElementById('commission_percentage_wrapper');
+          if (pwrapSingle) pwrapSingle.style.display = (singleSel.value === 'percentage_wise' || ( (singleSel.value === 'recurring' || singleSel.value === 'only_for_first_billing' || singleSel.value === 'every_billing') && (document.getElementById('commission_is_percentage') && document.getElementById('commission_is_percentage').checked) )) ? 'block' : 'none';
+          try{
+            var genPercent = document.getElementById('commission_percentage');
+            if (genPercent){
+              genPercent.addEventListener('input', function(){
+                try{
+                  var singleSelLocal = document.getElementById('bootstrap-wizard-commission-type');
+                  if (!singleSelLocal) return;
+                  if (singleSelLocal.value !== 'percentage_wise' && !(document.getElementById('commission_is_percentage') && document.getElementById('commission_is_percentage').checked && (singleSelLocal.value === 'recurring' || singleSelLocal.value === 'only_for_first_billing' || singleSelLocal.value === 'every_billing'))) return;
+                  var p = parseFloat(genPercent.value) || 0;
+                  var baseEl = document.getElementById('commission-summary-total');
+                  var base = baseEl ? (parseFloat((baseEl.textContent||'').replace(/,/g,'')) || 0) : 0;
+                  var computed = (base * p / 100) || 0;
+                  var amtInput = document.getElementById('commission_amount');
+                  if (amtInput) amtInput.value = (isNaN(computed) ? '' : computed.toFixed(2));
+                  try{
+                    var globalCalc = document.getElementById('commission-summary-total-calc');
+                    if (globalCalc) globalCalc.textContent = (isNaN(base) ? '' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2))));
+                  }catch(e){}
+                }catch(e){}
+              });
+            }
+          }catch(e){}
+
+          // attach single toggle handler
+          try{
+            var singleToggle = document.getElementById('commission_is_percentage');
+            if (singleToggle){
+              singleToggle.addEventListener('change', function(){
+                var pwrap = document.getElementById('commission_percentage_wrapper');
+                var w = document.getElementById('commission_amount_wrapper');
+                var isRecSel = (singleSel && (singleSel.value === 'recurring' || singleSel.value === 'only_for_first_billing' || singleSel.value === 'every_billing'));
+                if (singleToggle.checked){ if (pwrap) pwrap.style.display = 'block'; if (w) w.style.display = 'none'; }
+                else { if (pwrap) pwrap.style.display = 'none'; if (w) w.style.display = (singleSel && (singleSel.value === 'fix_amount' || isRecSel)) ? 'block' : 'none'; }
+                // recompute
+                var percentEl = document.getElementById('commission_percentage');
+                var p = parseFloat(percentEl && percentEl.value) || 0;
+                var baseEl = document.getElementById('commission-summary-total');
+                var base = baseEl ? (parseFloat((baseEl.textContent||'').replace(/,/g,'')) || 0) : 0;
+                var computed = (base * p / 100) || 0;
+                var amtInput = document.getElementById('commission_amount');
+                if (amtInput) amtInput.value = (isNaN(computed) ? '' : computed.toFixed(2));
+                try{ var globalCalc = document.getElementById('commission-summary-total-calc'); if (globalCalc) globalCalc.textContent = (isNaN(base) ? '-' : (Number(base).toFixed(2) + ' × ' + (isNaN(p) ? '0' : p) + '% = ' + (isNaN(computed) ? '--' : Number(computed).toFixed(2)))); }catch(e){}
+              });
+            }
+          }catch(e){}
         }
       }catch(e){}
       // update mirrored summary values after rebuilding

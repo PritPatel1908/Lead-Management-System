@@ -304,6 +304,7 @@ class LeadCommissionSlab(models.Model):
 	lead_commission_type_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 	lead_commission_credit_term_condition_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 	commission_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+	is_percentage_wise = models.BooleanField(default=False)
 	# Optional date range for which this commission slab is active
 	commission_start_date = models.DateField(null=True, blank=True)
 	commission_end_date = models.DateField(null=True, blank=True)
@@ -334,6 +335,27 @@ class LeadBilling(models.Model):
 	peremp_amount = models.PositiveIntegerField(null=True, blank=True)
 	amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 	another_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+	# Billing frequency/type
+	BILL_TYPE_ONE_TIME = 'one_time'
+	BILL_TYPE_YEARLY = 'yearly'
+	BILL_TYPE_HALF_YEARLY = 'half_yearly'
+	BILL_TYPE_QUARTERLY = 'quarterly'
+	BILL_TYPE_MONTHLY = 'monthly'
+	BILL_TYPE_CUSTOM = 'custom'
+	BILL_TYPE_CHOICES = [
+		(BILL_TYPE_ONE_TIME, 'One Time'),
+		(BILL_TYPE_YEARLY, 'Yearly'),
+		(BILL_TYPE_HALF_YEARLY, 'Half Yearly'),
+		(BILL_TYPE_QUARTERLY, 'Quarterly'),
+		(BILL_TYPE_MONTHLY, 'Monthly'),
+		(BILL_TYPE_CUSTOM, 'Custom'),
+	]
+
+	# type of billing (one-time, recurring, custom etc.)
+	bill_type = models.CharField(max_length=20, choices=BILL_TYPE_CHOICES, default=BILL_TYPE_ONE_TIME)
+	# when `bill_type` is custom this holds the number of months (nullable)
+	custome_month = models.PositiveIntegerField(null=True, blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 

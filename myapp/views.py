@@ -6,7 +6,9 @@ from django.utils.html import escape
 from django.utils.encoding import smart_str
 import csv
 import io
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate, login
+from django.views.decorators.csrf import csrf_protect
+from django.conf import settings
 from .forms import LocationForm, CompanyForm, PartnerForm, LeadForm, UserRegistrationForm, EditUserForm
 from .models import Location, Company, Partner, Lead, LeadPartner, UserProfile, Client, LeadCommissionSlab, LeadBilling
 
@@ -29,7 +31,8 @@ def _save_lead_billing_from_post(lead, post):
 		billing_fields = [
 			'is_peremp_wise','emp_count','peremp_amount','another_amount','amount',
 			'is_peremp_wise_software','emp_count_software','peremp_amount_software','another_amount_software',
-			'another_amount_hardware','is_peremp_wise_hardware','emp_count_hardware','peremp_amount_hardware'
+			'another_amount_hardware','is_peremp_wise_hardware','emp_count_hardware','peremp_amount_hardware',
+			'bill_type','custome_month','bill_type_software','custome_month_software','bill_type_hardware','custome_month_hardware'
 		]
 		has_billing = False
 		for k in billing_fields:
@@ -62,6 +65,25 @@ def _save_lead_billing_from_post(lead, post):
 				return False
 
 		desired = []
+		# existing billing rows map (by lead_for) - used to read id-specific POST keys
+		existing_lbs = list(LeadBilling.objects.filter(lead=lead))
+		existing_map_by_lead_for = { getattr(x, 'lead_for', ''): x for x in existing_lbs }
+
+		# helper: detect whether any of the provided POST keys contain a meaningful value
+		def _post_has_value(*keys):
+			for k in keys:
+				try:
+					v = post.get(k)
+				except Exception:
+					v = None
+				if v is None:
+					continue
+				try:
+					if str(v).strip() != '':
+						return True
+				except Exception:
+					return True
+			return False
 		# combined software+hardware
 		if lead_for_val == LeadCommissionSlab.LEAD_FOR_SOFTWARE_HARDWARE or (('software' in lead_for_val.lower()) and ('hardware' in lead_for_val.lower())):
 			# software
@@ -138,6 +160,22 @@ def _save_lead_billing_from_post(lead, post):
 			except Exception:
 				total_hw = None
 
+			# try to parse bill_type and custom month for software (several possible input names)
+			bill_type_sw = (post.get('bill_type_software') or post.get('bill_type') or post.get('bill_type_sw'))
+			try:
+				lb_sw = existing_map_by_lead_for.get(LeadCommissionSlab.LEAD_FOR_SOFTWARE)
+				if lb_sw:
+					bill_type_sw = post.get(f'bill_type_{getattr(lb_sw, "id", "")}') or bill_type_sw
+			except Exception:
+				pass
+			custome_month_sw = None
+			try:
+				cm = post.get('custome_month_software') or post.get('custome_month') or post.get('custome_month_sw')
+				if cm not in (None, ''):
+					custome_month_sw = int(cm)
+			except Exception:
+				custome_month_sw = None
+
 			desired.append({
 				'lead_for': LeadCommissionSlab.LEAD_FOR_SOFTWARE,
 				'is_for_software': True,
@@ -146,7 +184,33 @@ def _save_lead_billing_from_post(lead, post):
 				'peremp_amount': peremp_amount_parsed_sw,
 				'another_amount': another_amount_parsed_sw,
 				'amount': total_sw,
+				# presence flags: only persist/update these fields when non-empty values were posted
+				'provided_is_peremp': _post_has_value('is_peremp_wise_software'),
+				'provided_emp_count': _post_has_value('emp_count_software'),
+				'provided_peremp_amount': _post_has_value('peremp_amount_software'),
+				'provided_another_amount': _post_has_value('another_amount_software'),
+				'provided_amount': _post_has_value('amount_software', 'amount_sw', 'amount'),
+				'provided_bill_type': _post_has_value('bill_type_software', 'bill_type', 'bill_type_sw') or (_post_has_value(f'bill_type_{getattr(existing_map_by_lead_for.get(LeadCommissionSlab.LEAD_FOR_SOFTWARE), "id", "")}') if existing_map_by_lead_for.get(LeadCommissionSlab.LEAD_FOR_SOFTWARE) else False),
+				'provided_custome_month': _post_has_value('custome_month_software', 'custome_month', 'custome_month_sw'),
+				'bill_type': bill_type_sw,
+				'custome_month': custome_month_sw,
 			})
+			# try to parse bill_type and custom month for hardware
+			bill_type_hw = (post.get('bill_type_hardware') or post.get('bill_type') or post.get('bill_type_hw'))
+			try:
+				lb_hw = existing_map_by_lead_for.get(LeadCommissionSlab.LEAD_FOR_HARDWARE)
+				if lb_hw:
+					bill_type_hw = post.get(f'bill_type_{getattr(lb_hw, "id", "")}') or bill_type_hw
+			except Exception:
+				pass
+			custome_month_hw = None
+			try:
+				cm = post.get('custome_month_hardware') or post.get('custome_month') or post.get('custome_month_hw')
+				if cm not in (None, ''):
+					custome_month_hw = int(cm)
+			except Exception:
+				custome_month_hw = None
+
 			desired.append({
 				'lead_for': LeadCommissionSlab.LEAD_FOR_HARDWARE,
 				'is_for_software': False,
@@ -155,6 +219,15 @@ def _save_lead_billing_from_post(lead, post):
 				'peremp_amount': peremp_amount_parsed_hw,
 				'another_amount': another_amount_parsed_hw,
 				'amount': total_hw,
+				'provided_is_peremp': _post_has_value('is_peremp_wise_hardware'),
+				'provided_emp_count': _post_has_value('emp_count_hardware'),
+				'provided_peremp_amount': _post_has_value('peremp_amount_hardware'),
+				'provided_another_amount': _post_has_value('another_amount_hardware'),
+				'provided_amount': _post_has_value('amount_hardware', 'amount_hw'),
+				'provided_bill_type': _post_has_value('bill_type_hardware', 'bill_type', 'bill_type_hw') or (_post_has_value(f'bill_type_{getattr(existing_map_by_lead_for.get(LeadCommissionSlab.LEAD_FOR_HARDWARE), "id", "")}') if existing_map_by_lead_for.get(LeadCommissionSlab.LEAD_FOR_HARDWARE) else False),
+				'provided_custome_month': _post_has_value('custome_month_hardware', 'custome_month', 'custome_month_hw'),
+				'bill_type': bill_type_hw,
+				'custome_month': custome_month_hw,
 			})
 		else:
 			# single lead_for case
@@ -194,6 +267,24 @@ def _save_lead_billing_from_post(lead, post):
 			except Exception:
 				total = None
 
+			# try to parse generic bill_type / custome_month for single-slot case
+			bill_type_single = (post.get('bill_type') or '')
+			try:
+				# if there's an existing LeadBilling row for this lead_for, allow id-based POST key
+				if existing_map_by_lead_for:
+					existing_any = next(iter(existing_map_by_lead_for.values()))
+					if existing_any:
+						bill_type_single = post.get(f'bill_type_{getattr(existing_any, "id", "")}') or bill_type_single
+			except Exception:
+				pass
+			custome_month_single = None
+			try:
+				cm = post.get('custome_month')
+				if cm not in (None, ''):
+					custome_month_single = int(cm)
+			except Exception:
+				custome_month_single = None
+
 			desired.append({
 				'lead_for': lead_for_val,
 				'is_for_software': (lead_for_val == LeadCommissionSlab.LEAD_FOR_SOFTWARE),
@@ -202,6 +293,15 @@ def _save_lead_billing_from_post(lead, post):
 				'peremp_amount': peremp_amount_parsed,
 				'another_amount': another_amount_parsed,
 				'amount': total,
+				'provided_is_peremp': _post_has_value('is_peremp_wise'),
+				'provided_emp_count': _post_has_value('emp_count'),
+				'provided_peremp_amount': _post_has_value('peremp_amount'),
+				'provided_another_amount': _post_has_value('another_amount'),
+				'provided_amount': _post_has_value('amount'),
+				'provided_bill_type': _post_has_value('bill_type') or (_post_has_value(f'bill_type_{getattr(next(iter(existing_map_by_lead_for.values()), None), "id", "")}') if existing_map_by_lead_for else False),
+				'provided_custome_month': _post_has_value('custome_month'),
+				'bill_type': bill_type_single,
+				'custome_month': custome_month_single,
 			})
 
 		# Compare with existing LeadBilling rows and update/create/delete only when needed
@@ -226,14 +326,25 @@ def _save_lead_billing_from_post(lead, post):
 				if existing:
 					changed = False
 					if bool(existing.is_peremp_wise_amount) != bool(d.get('is_peremp')):
-						changed = True
+						# only consider checkbox change if user actually posted a value for it
+						if d.get('provided_is_peremp'):
+							changed = True
 					if (existing.emp_count if existing.emp_count is not None else None) != (d.get('emp_count') if d.get('emp_count') is not None else None):
-						changed = True
+						if d.get('provided_emp_count'):
+							changed = True
 					if (existing.peremp_amount if existing.peremp_amount is not None else None) != (d.get('peremp_amount') if d.get('peremp_amount') is not None else None):
-						changed = True
+						if d.get('provided_peremp_amount'):
+							changed = True
 					if dec_or_none(existing.another_amount) != dec_or_none(d.get('another_amount')):
-						changed = True
+						if d.get('provided_another_amount'):
+							changed = True
 					if dec_or_none(existing.amount) != dec_or_none(d.get('amount')):
+						if d.get('provided_amount'):
+							changed = True
+					# billing type / custom-month changes
+					if d.get('provided_bill_type') and ((getattr(existing, 'bill_type', None) or '') != (d.get('bill_type') or '')):
+						changed = True
+					if d.get('provided_custome_month') and ((getattr(existing, 'custome_month', None) if getattr(existing, 'custome_month', None) is not None else None) != (d.get('custome_month') if d.get('custome_month') is not None else None)):
 						changed = True
 					if changed:
 						existing.is_for_software = d.get('is_for_software', existing.is_for_software)
@@ -242,6 +353,8 @@ def _save_lead_billing_from_post(lead, post):
 						existing.peremp_amount = d.get('peremp_amount')
 						existing.another_amount = d.get('another_amount')
 						existing.amount = d.get('amount')
+						existing.bill_type = d.get('bill_type', getattr(existing, 'bill_type', None))
+						existing.custome_month = d.get('custome_month', getattr(existing, 'custome_month', None))
 						existing.save()
 						updated += 1
 				else:
@@ -253,7 +366,9 @@ def _save_lead_billing_from_post(lead, post):
 						emp_count=d.get('emp_count'),
 						peremp_amount=d.get('peremp_amount'),
 						another_amount=d.get('another_amount'),
-						amount=d.get('amount')
+						amount=d.get('amount'),
+						bill_type=(d.get('bill_type') or LeadBilling.BILL_TYPE_ONE_TIME),
+						custome_month=d.get('custome_month', None)
 					)
 					created += 1
 			# remove any existing billing rows not in desired set
@@ -268,6 +383,49 @@ def _save_lead_billing_from_post(lead, post):
 def dashboard(request):
 	"""Render the default dashboard page."""
 	return render(request, 'dashboard/dashboard.html')
+
+
+@require_POST
+@csrf_protect
+def ajax_login(request):
+	"""Handle AJAX login requests and return JSON responses.
+
+	Expects `username`, `password`, optional `remember`, and optional `next`.
+	"""
+	username = (request.POST.get('username') or '').strip()
+	password = request.POST.get('password') or ''
+
+	if not username or not password:
+		return JsonResponse({'success': False, 'errors': 'Username and password are required.'}, status=400)
+
+	# Try normal username authentication first
+	user = authenticate(request, username=username, password=password)
+
+	# If that fails and the provided identifier looks like an email, try email lookup
+	if user is None and '@' in username:
+		try:
+			user_candidate = get_user_model().objects.filter(email__iexact=username).first()
+		except Exception:
+			user_candidate = None
+		if user_candidate:
+			user = authenticate(request, username=getattr(user_candidate, get_user_model().USERNAME_FIELD, user_candidate.username), password=password)
+
+	if user is None:
+		return JsonResponse({'success': False, 'errors': 'Invalid email or password.'}, status=401)
+	if not getattr(user, 'is_active', True):
+		return JsonResponse({'success': False, 'errors': 'This account is disabled.'}, status=403)
+
+	# Log the user in and set session expiry based on "remember me"
+	login(request, user)
+	remember = request.POST.get('remember')
+	if not remember:
+		# expire on browser close
+		request.session.set_expiry(0)
+	else:
+		request.session.set_expiry(settings.SESSION_COOKIE_AGE)
+
+	next_url = request.POST.get('next') or request.GET.get('next') or settings.LOGIN_REDIRECT_URL or '/'
+	return JsonResponse({'success': True, 'next': next_url})
 
 # Location views
 def location_list(request):
@@ -1035,6 +1193,27 @@ def add_lead(request):
 						amt_raw = ''
 					amt_val = _parse_decimal(amt_raw)
 
+					# detect per-slot / generic "is percentage" toggle (commission_is_percentage_<id>)
+					is_pct_toggle = False
+					try:
+						toggle_key_id = f'commission_is_percentage_{getattr(lb, "id", "")}'
+						toggle_key_lf = f'commission_is_percentage_{(getattr(lb, "lead_for", "") or "").strip()}'
+						toggle_raw = (post_data.get(toggle_key_id) or post_data.get(toggle_key_lf) or post_data.get('commission_is_percentage'))
+						if toggle_raw and str(toggle_raw).strip().lower() in ('1', 'true', 'on', 'yes'):
+							is_pct_toggle = True
+					except Exception:
+						is_pct_toggle = False
+
+					# commission percentage / type value keys (per-slot, per-lead_for, or generic)
+					ctval_key_id = f'commission_type_value_{getattr(lb, "id", "")}'
+					ctval_key_lf = f'commission_type_value_{(getattr(lb, "lead_for", "") or "").strip()}'
+					try:
+						ctval_raw = (post_data.get(ctval_key_id) or post_data.get(ctval_key_lf) or post_data.get('commission_type_value') or '')
+						ctval_raw = (ctval_raw or '').strip()
+					except Exception:
+						ctval_raw = ''
+					ct_val = _parse_decimal(ctval_raw)
+
 					# find existing slab for this billing
 					slab = LeadCommissionSlab.objects.filter(lead=lead, lead_billing=lb).first()
 					if slab:
@@ -1043,8 +1222,40 @@ def add_lead(request):
 							if slab.lead_commission_type != ct:
 								slab.lead_commission_type = ct
 								changed = True
-						# Only set commission_amount when commission type is fix amount
+							# persist whether this slab is percentage-based
+							try:
+									# For recurring-like types the client may toggle "Is Percentage" on/off
+									new_is_pct = False
+									if ct == LeadCommissionSlab.TYPE_PERCENTAGE:
+										new_is_pct = True
+									else:
+										# treat recurring/first/every as percentage only when toggle is set
+										if ct in (LeadCommissionSlab.TYPE_RECURRING, LeadCommissionSlab.TYPE_ONLY_FIRST, LeadCommissionSlab.TYPE_EVERY_BILLING) and is_pct_toggle:
+											new_is_pct = True
+									if getattr(slab, 'is_percentage_wise', False) != new_is_pct:
+										slab.is_percentage_wise = new_is_pct
+										changed = True
+							except Exception:
+								pass
+						# Set commission_amount when commission type is fix amount, or when
+						# recurring-like type is used with percentage-toggle OFF (user entered a fixed amount)
 						if ct == LeadCommissionSlab.TYPE_FIX and amt_val is not None:
+							if slab.commission_amount is None or slab.commission_amount != amt_val:
+								slab.commission_amount = amt_val
+								changed = True
+						# When percentage type, persist the percentage value and computed amount (if provided)
+						if ct == LeadCommissionSlab.TYPE_PERCENTAGE or (ct in (LeadCommissionSlab.TYPE_RECURRING, LeadCommissionSlab.TYPE_ONLY_FIRST, LeadCommissionSlab.TYPE_EVERY_BILLING) and is_pct_toggle):
+							if ct_val is not None:
+								if slab.lead_commission_type_value is None or slab.lead_commission_type_value != ct_val:
+									slab.lead_commission_type_value = ct_val
+									changed = True
+							# also accept a computed commission_amount posted by the client-side
+							if amt_val is not None:
+								if slab.commission_amount is None or slab.commission_amount != amt_val:
+									slab.commission_amount = amt_val
+									changed = True
+						# For recurring-like types with toggle OFF, accept explicit amt_val as fix amount
+						if ct in (LeadCommissionSlab.TYPE_RECURRING, LeadCommissionSlab.TYPE_ONLY_FIRST, LeadCommissionSlab.TYPE_EVERY_BILLING) and (not is_pct_toggle) and amt_val is not None:
 							if slab.commission_amount is None or slab.commission_amount != amt_val:
 								slab.commission_amount = amt_val
 								changed = True
@@ -1058,8 +1269,20 @@ def add_lead(request):
 								'lead_commission_credit_term_condition': LeadCommissionSlab.CREDIT_AFTER_BILLING,
 								'lead_billing': lb
 							}
+							# mark whether the slab is percentage-based — treat recurring-like as percentage only when toggle set
+							create_kwargs['is_percentage_wise'] = True if (ct == LeadCommissionSlab.TYPE_PERCENTAGE or (ct in (LeadCommissionSlab.TYPE_RECURRING, LeadCommissionSlab.TYPE_ONLY_FIRST, LeadCommissionSlab.TYPE_EVERY_BILLING) and is_pct_toggle)) else False
+							# If explicit fix amount or recurring-like with toggle OFF, store commission_amount
 							if ct == LeadCommissionSlab.TYPE_FIX and amt_val is not None:
 								create_kwargs['commission_amount'] = amt_val
+							if ct in (LeadCommissionSlab.TYPE_RECURRING, LeadCommissionSlab.TYPE_ONLY_FIRST, LeadCommissionSlab.TYPE_EVERY_BILLING):
+								if not is_pct_toggle and amt_val is not None:
+									create_kwargs['commission_amount'] = amt_val
+							# Percentage-based values
+							if ct == LeadCommissionSlab.TYPE_PERCENTAGE or (ct in (LeadCommissionSlab.TYPE_RECURRING, LeadCommissionSlab.TYPE_ONLY_FIRST, LeadCommissionSlab.TYPE_EVERY_BILLING) and is_pct_toggle):
+								if ct_val is not None:
+									create_kwargs['lead_commission_type_value'] = ct_val
+								if amt_val is not None:
+									create_kwargs['commission_amount'] = amt_val
 							LeadCommissionSlab.objects.create(**create_kwargs)
 			except Exception:
 				# swallow errors so lead save isn't blocked
@@ -1092,7 +1315,9 @@ def add_lead(request):
 								'another_amount': str(b.another_amount) if b.another_amount is not None else None,
 								'amount': str(b.amount) if b.amount is not None else None,
 								'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
+								'commission_type_value': getattr(slab, 'lead_commission_type_value', None) if slab else None,
 								'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+								'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 								'slab_id': getattr(slab, 'id', None) if slab else None,
 							})
 					except Exception:
@@ -1117,7 +1342,9 @@ def add_lead(request):
 								'another_amount': str(b.another_amount) if b.another_amount is not None else None,
 								'amount': str(b.amount) if b.amount is not None else None,
 								'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
+								'commission_type_value': getattr(slab, 'lead_commission_type_value', None) if slab else None,
 								'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+								'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 								'slab_id': getattr(slab, 'id', None) if slab else None,
 							})
 					except Exception:
@@ -1136,7 +1363,20 @@ def add_lead(request):
 				# include non-field errors
 				for e in form.non_field_errors():
 					errors.append(str(e))
-				return JsonResponse({'ok': False, 'errors': errors}, status=400)
+				# include posted keys to help debug missing/incorrect field names
+				posted_keys_list = []
+				try:
+					posted_keys_list = sorted(list(post_data.keys()))
+				except Exception:
+					posted_keys_list = []
+				# structured form errors
+				form_errors = {}
+				try:
+					for k, v in form.errors.items():
+						form_errors[k] = [str(x) for x in v]
+				except Exception:
+					form_errors = {}
+				return JsonResponse({'ok': False, 'errors': errors, 'form_errors': form_errors, 'posted_keys': posted_keys_list}, status=400)
 			messages.error(request, 'Please correct the errors below.')
 	else:
 		# If `id` query param provided, load existing Lead for editing so the form is pre-filled
@@ -1174,6 +1414,13 @@ def add_lead(request):
 	selected_peremp_amount = 0
 	selected_emp_count = 0
 	selected_another_amount = 0
+	# billing frequency selections
+	selected_bill_type = ''
+	selected_custome_month = None
+	selected_bill_type_software = ''
+	selected_custome_month_software = None
+	selected_bill_type_hardware = ''
+	selected_custome_month_hardware = None
 	# selected commission type (populated from POST or existing LeadCommissionSlab)
 	selected_commission_type = ''
 	selected_is_peremp_wise_software = False
@@ -1207,6 +1454,28 @@ def add_lead(request):
 					selected_another_amount_software = request.POST.get('another_amount_software')
 				if request.POST.get('another_amount_hardware') is not None:
 					selected_another_amount_hardware = request.POST.get('another_amount_hardware')
+				# billing frequency posted values
+				if request.POST.get('bill_type') is not None:
+					selected_bill_type = (request.POST.get('bill_type') or '').strip()
+				if request.POST.get('custome_month') is not None:
+					try:
+						selected_custome_month = int(request.POST.get('custome_month'))
+					except Exception:
+						selected_custome_month = None
+				if request.POST.get('bill_type_software') is not None:
+					selected_bill_type_software = (request.POST.get('bill_type_software') or '').strip()
+				if request.POST.get('custome_month_software') is not None:
+					try:
+						selected_custome_month_software = int(request.POST.get('custome_month_software'))
+					except Exception:
+						selected_custome_month_software = None
+				if request.POST.get('bill_type_hardware') is not None:
+					selected_bill_type_hardware = (request.POST.get('bill_type_hardware') or '').strip()
+				if request.POST.get('custome_month_hardware') is not None:
+					try:
+						selected_custome_month_hardware = int(request.POST.get('custome_month_hardware'))
+					except Exception:
+						selected_custome_month_hardware = None
 				# commission type posted from the commission tab
 				if request.POST.get('commission_type') is not None:
 					selected_commission_type = (request.POST.get('commission_type') or '').strip()
@@ -1236,6 +1505,9 @@ def add_lead(request):
 								selected_peremp_amount_software = getattr(b, 'peremp_amount', 0) or 0
 								selected_emp_count_software = getattr(b, 'emp_count', 0) or 0
 								selected_another_amount_software = getattr(b, 'another_amount', 0) or 0
+								# billing frequency values from existing LeadBilling
+								selected_bill_type_software = getattr(b, 'bill_type', '') or ''
+								selected_custome_month_software = getattr(b, 'custome_month', None)
 								# mirror into single-fields when only software present
 								selected_is_peremp_wise = selected_is_peremp_wise_software
 								selected_peremp_amount = selected_peremp_amount_software
@@ -1243,8 +1515,23 @@ def add_lead(request):
 								selected_another_amount = selected_another_amount_software
 							elif 'hardware' in lf:
 								selected_another_amount_hardware = getattr(b, 'another_amount', 0) or 0
+								selected_bill_type_hardware = getattr(b, 'bill_type', '') or ''
+								selected_custome_month_hardware = getattr(b, 'custome_month', None)
 								# mirror for single hardware-only case
 								selected_another_amount = selected_another_amount_hardware
+
+					# Mirror billing frequency values into single-field variables when only
+					# software or only hardware billing is present so the single-slot form
+					# pre-selects the saved option on edit.
+					try:
+						if has_sw and not has_hw:
+							selected_bill_type = selected_bill_type_software or ''
+							selected_custome_month = selected_custome_month_software
+						elif has_hw and not has_sw:
+							selected_bill_type = selected_bill_type_hardware or ''
+							selected_custome_month = selected_custome_month_hardware
+					except Exception:
+						pass
 				except Exception:
 					# swallow and continue with defaults
 					pass
@@ -1279,8 +1566,12 @@ def add_lead(request):
 					'peremp_amount': getattr(lb, 'peremp_amount', None),
 					'another_amount': getattr(lb, 'another_amount', None),
 					'amount': getattr(lb, 'amount', None),
+					'bill_type': getattr(lb, 'bill_type', None) or '',
+					'custome_month': getattr(lb, 'custome_month', None),
 					'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
+					'commission_type_value': getattr(slab, 'lead_commission_type_value', None) if slab else None,
 					'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+					'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 					'slab_id': getattr(slab, 'id', None) if slab else None,
 				})
 	except Exception:
@@ -1298,6 +1589,15 @@ def add_lead(request):
 		# commission choices pulled from model
 		'commission_type_choices': LeadCommissionSlab.TYPE_CHOICES,
 		'selected_commission_type': selected_commission_type,
+		# billing type choices for template
+		'bill_type_choices': LeadBilling.BILL_TYPE_CHOICES,
+		# billing frequency selected values (from POST or LeadBilling rows)
+		'selected_bill_type': selected_bill_type,
+		'selected_custome_month': selected_custome_month,
+		'selected_bill_type_software': selected_bill_type_software,
+		'selected_custome_month_software': selected_custome_month_software,
+		'selected_bill_type_hardware': selected_bill_type_hardware,
+		'selected_custome_month_hardware': selected_custome_month_hardware,
 		'lead_billing_rows': lead_billing_rows,
 		# billing template values (populated from POST or LeadBilling rows)
 		'selected_peremp_amount': selected_peremp_amount,

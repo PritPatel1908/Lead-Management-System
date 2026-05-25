@@ -47,6 +47,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'myapp.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -171,3 +172,16 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
 SESSION_SAVE_EVERY_REQUEST = True  # Extend session on every request
 SESSION_COOKIE_NAME = 'session_elms' # Custom session cookie name
+
+# Login / authentication settings
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+# URL patterns (regex-ish) that should be accessible without authentication
+LOGIN_EXEMPT_URLS = [
+    r'^login/$',
+    r'^logout/$',
+    r'^ajax-login/',
+    r'^admin/',
+    r'^static/',
+    r'^media/',
+]

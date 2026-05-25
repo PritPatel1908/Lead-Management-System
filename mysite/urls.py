@@ -16,9 +16,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from django.contrib.auth import views as auth_views
+from django.views.decorators.csrf import ensure_csrf_cookie
 from myapp import views as myapp_views
 
 urlpatterns = [
+    # Authentication
+    path('login/', ensure_csrf_cookie(auth_views.LoginView.as_view(template_name='authentication/login.html')), name='login'),
+    path('ajax-login/', myapp_views.ajax_login, name='ajax_login'),
+    path('logout/', auth_views.LogoutView.as_view(next_page='/login/'), name='logout'),
     # Dashboard
     path('', myapp_views.dashboard, name='dashboard'),
 
