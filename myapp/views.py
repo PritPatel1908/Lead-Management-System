@@ -9,8 +9,8 @@ import io
 from django.contrib.auth import get_user_model, authenticate, login
 from django.views.decorators.csrf import csrf_protect
 from django.conf import settings
-from .forms import LocationForm, CompanyForm, PartnerForm, LeadForm, UserRegistrationForm, EditUserForm
-from .models import Location, Company, Partner, Lead, LeadPartner, UserProfile, Client, LeadCommissionSlab, LeadBilling
+from .forms import LocationForm, CompanyForm, PartnerForm, LeadForm, UserRegistrationForm, EditUserForm, ProductForm
+from .models import Location, Company, Partner, Lead, LeadPartner, UserProfile, Client, LeadCommissionSlab, LeadBilling, Product
 
 
 def _save_lead_billing_from_post(lead, post):
@@ -1875,4 +1875,180 @@ def restore_user(request):
 		user_obj.save()
 		messages.success(request, 'User restored successfully.')
 	return redirect('user_list')
+
+
+def product_list(request):
+	"""Render the product list page and support export."""
+	show_drafts = str(request.GET.get('show_drafts', '')).lower() in ['1', 'true', 'on', 'yes']
+	show_deleted = str(request.GET.get('show_deleted', '')).lower() in ['1', 'true', 'on', 'yes']
+	if show_deleted:
+		if hasattr(Product, 'is_deleted'):
+			products = Product.objects.filter(is_deleted=True).order_by('-created_at')
+		else:
+			products = Product.objects.none()
+	elif show_drafts:
+		if hasattr(Product, 'is_draft'):
+			products = Product.objects.filter(is_draft=True, is_deleted=False).order_by('-created_at')
+		else:
+			products = Product.objects.none()
+	else:
+		# Default listing: exclude drafts and soft-deleted items when model supports them
+		order_field = '-created_at' if hasattr(Product, 'created_at') else '-id'
+		if hasattr(Product, 'is_draft') and hasattr(Product, 'is_deleted'):
+			products = Product.objects.filter(is_draft=False, is_deleted=False).order_by(order_field)
+		else:
+			# fallback: return all products ordered by available field
+			products = Product.objects.all().order_by(order_field)
+
+	export_fmt = str(request.GET.get('export', '')).lower()
+	if export_fmt:
+		export_scope = str(request.GET.get('export_scope', 'all')).lower()
+		qs = products
+		if export_scope == 'page':
+			try:
+				page = int(request.GET.get('page', '1'))
+				per_page = int(request.GET.get('per_page', request.GET.get('per_page', '')) or 0)
+			except Exception:
+				page = None
+				per_page = 0
+			if page and per_page:
+				start = (page - 1) * per_page
+				end = start + per_page
+				qs = products[start:end]
+
+		rows = []
+		for p in qs:
+			rows.append([p.sku, p.name, p.description or ''])
+
+		if export_fmt == 'csv':
+			resp = HttpResponse(content_type='text/csv')
+			resp['Content-Disposition'] = 'attachment; filename="products.csv"'
+			writer = csv.writer(resp)
+			writer.writerow(['SKU', 'Name', 'Description'])
+			for r in rows:
+				writer.writerow([smart_str(x) for x in r])
+			return resp
+
+		if export_fmt == 'txt':
+			resp = HttpResponse(content_type='text/plain; charset=utf-8')
+			resp['Content-Disposition'] = 'attachment; filename="products.txt"'
+			for r in rows:
+				resp.write('\t'.join([smart_str(x) for x in r]) + '\n')
+			return resp
+
+		if export_fmt in ('xlsx', 'excel'):
+			html = '<table><thead><tr><th>SKU</th><th>Name</th><th>Description</th></tr></thead><tbody>'
+			for r in rows:
+				row_html = ''.join(['<td>%s</td>' % escape(str(c)) for c in r])
+				html += '<tr>%s</tr>' % row_html
+			html += '</tbody></table>'
+			resp = HttpResponse(html, content_type='application/vnd.ms-excel')
+			resp['Content-Disposition'] = 'attachment; filename="products.xls"'
+			return resp
+
+		resp = HttpResponse('PDF export is not implemented on the server. Please choose CSV or Excel.', content_type='text/plain')
+		resp.status_code = 501
+		return resp
+
+	return render(request, 'products/product-list.html', {'products': products, 'show_drafts': show_drafts, 'show_deleted': show_deleted})
+
+
+def add_product(request):
+	"""Create or edit a Product."""
+	product = None
+	if request.method == 'POST':
+		product_id = request.POST.get('id') or request.GET.get('id')
+		if product_id:
+			product = get_object_or_404(Product, pk=product_id)
+			form = ProductForm(request.POST, instance=product)
+		else:
+			form = ProductForm(request.POST)
+
+		action = request.POST.get('action') or 'publish'
+		if form.is_valid():
+			product = form.save(commit=False)
+			# if Product has draft flag, respect it; otherwise ignore
+			try:
+				if hasattr(product, 'is_draft'):
+					product.is_draft = (action == 'draft')
+			except Exception:
+				pass
+			product.save()
+			# save many-to-many relations (companies, locations) when provided
+			try:
+				comps = form.cleaned_data.get('companies')
+				if comps is not None:
+					product.companies.set(comps)
+				locs = form.cleaned_data.get('locations')
+				if locs is not None:
+					product.locations.set(locs)
+			except Exception:
+				# swallow errors to avoid blocking main save flow
+				pass
+			if product_id:
+				messages.success(request, 'Product updated successfully.')
+			else:
+				if getattr(product, 'is_draft', False):
+					messages.success(request, 'Product saved as draft.')
+				else:
+					messages.success(request, 'Product added successfully.')
+			return redirect('product_list')
+		else:
+			messages.error(request, 'Please correct the errors below.')
+	else:
+		product_id = request.GET.get('id')
+		if product_id:
+			product = get_object_or_404(Product, pk=product_id)
+			form = ProductForm(instance=product)
+		else:
+			form = ProductForm()
+
+	return render(request, 'products/add-product.html', {'form': form, 'product': product})
+
+
+def product_detail(request):
+	product_id = request.GET.get('id')
+	if not product_id:
+		messages.error(request, 'No product id provided.')
+		return redirect('product_list')
+	product = get_object_or_404(Product, pk=product_id)
+	return render(request, 'products/product-detail.html', {'product': product})
+
+
+@require_POST
+def delete_product(request):
+	product_id = request.POST.get('id')
+	if not product_id:
+		messages.error(request, 'No product id provided.')
+		return redirect('product_list')
+	product = get_object_or_404(Product, pk=product_id)
+	try:
+		if hasattr(product, 'is_deleted'):
+			product.is_deleted = True
+			product.save()
+		else:
+			product.delete()
+		messages.success(request, 'Product deleted successfully.')
+	except Exception as e:
+		messages.error(request, 'Failed to delete product: %s' % str(e))
+	return redirect('product_list')
+
+
+@require_POST
+def restore_product(request):
+	product_id = request.POST.get('id')
+	if not product_id:
+		messages.error(request, 'No product id provided.')
+		return redirect('product_list')
+	if hasattr(Product, 'is_deleted'):
+		product = get_object_or_404(Product, pk=product_id)
+		if not product.is_deleted:
+			messages.info(request, 'Product is not deleted.')
+		else:
+			product.is_deleted = False
+			product.save()
+			messages.success(request, 'Product restored successfully.')
+	else:
+		messages.error(request, 'Restore is not supported for products.')
+	return redirect('product_list')
 

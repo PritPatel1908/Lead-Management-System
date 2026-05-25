@@ -1,0 +1,95 @@
+{% extends 'components/base.html' %}
+
+{% load static %}
+{% block content %}
+<nav class="mb-3" style="--falcon-breadcrumb-divider: '»';" aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'product_list' %}">Products</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Product details</li>
+  </ol>
+</nav>
+
+<div class="row gx-3">
+  <div class="col-lg-8 col-12">
+    <div class="card mb-3">
+      <div class="card-header bg-body-tertiary d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Basic information</h6>
+        <div>
+          {% if product.status == 'active' %}
+            <small class="badge rounded badge-subtle-success me-1">Active</small>
+          {% else %}
+            <small class="badge rounded badge-subtle-secondary me-1">Inactive</small>
+          {% endif %}
+          {% if product.is_draft %}
+            <small class="badge rounded badge-subtle-warning me-1">Draft</small>
+          {% endif %}
+          {% if product.is_deleted %}
+            <small class="badge rounded badge-subtle-danger">Deleted</small>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="row gx-2">
+          <div class="col-6 mb-3">
+            <label class="form-label">Product name:</label>
+            <p class="form-control-plaintext">{{ product.name }}</p>
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">SKU:</label>
+            <p class="form-control-plaintext">{{ product.sku }}</p>
+            <label class="form-label">Status:</label>
+            <p class="form-control-plaintext">
+              {% if product.status == 'active' %}
+                <span class="badge rounded badge-subtle-success">Active</span>
+              {% else %}
+                <span class="badge rounded badge-subtle-secondary">Inactive</span>
+              {% endif %}
+            </p>
+          </div>
+          <div class="col-12 mb-3">
+            <label class="form-label">Description:</label>
+            <p class="form-control-plaintext">{{ product.description|linebreaksbr }}</p>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end">
+        <a class="btn btn-falcon-default me-2" href="{% url 'product_list' %}">Back</a>
+        <a class="btn btn-outline-primary" href="{% url 'edit_product' %}?id={{ product.id }}">Edit</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 col-12">
+    <div class="card mb-3">
+      <div class="card-header bg-body-tertiary">
+        <h6 class="mb-0">Related</h6>
+      </div>
+      <div class="card-body">
+            <p class="mb-2"><strong>Companies:</strong></p>
+            {% if product.companies.all %}
+              <ul class="list-unstyled mb-2">
+                {% for comp in product.companies.all %}
+                  <li><a href="{% url 'company_detail' %}?id={{ comp.id }}">{{ comp.name }}</a></li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="mb-2">No companies linked.</p>
+            {% endif %}
+            <hr />
+            <p class="mb-2"><strong>Locations:</strong></p>
+            {% if product.locations.all %}
+              <ul class="list-unstyled mb-0">
+                {% for loc in product.locations.all %}
+                  <li>{{ loc.name }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="mb-0">No locations linked.</p>
+            {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock content %}

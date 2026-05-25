@@ -1131,7 +1131,7 @@
                             <hr class="mb-0 navbar-vertical-divider" />
                         </div>
                     </div>
-                    <a class="nav-link dropdown-indicator" href="#events" role="button" data-bs-toggle="collapse" aria-expanded="true" aria-controls="events">
+                    <a class="nav-link dropdown-indicator" href="#masters" role="button" data-bs-toggle="collapse" aria-expanded="true" aria-controls="masters">
                         <div class="d-flex align-items-center">
                             <span class="nav-link-icon">
                                 <span class="fas fa-calendar-day"></span>
@@ -1139,7 +1139,7 @@
                             <span class="nav-link-text ps-1">Events</span>
                         </div>
                     </a>
-                    <ul class="nav collapse show" id="events">
+                    <ul class="nav collapse show" id="masters">
                         <li class="nav-item">
                             {% url 'location_list' as location_url %}
                             <a class="nav-link {% if location_url in request.path %}active{% endif %}" href="{{ location_url }}" role="button" {% if location_url in request.path %}aria-current="page"{% endif %}>
@@ -1170,6 +1170,17 @@
                                         <span class="fas fa-handshake"></span>
                                     </span>
                                     <span class="nav-link-text ps-1">Partners</span>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            {% url 'product_list' as product_url %}
+                            <a class="nav-link {% if product_url in request.path %}active{% endif %}" href="{{ product_url }}" role="button" {% if product_url in request.path %}aria-current="page"{% endif %}>
+                                <div class="d-flex align-items-center">
+                                    <span class="nav-link-icon">
+                                        <span class="fas fa-box"></span>
+                                    </span>
+                                    <span class="nav-link-text ps-1">Products</span>
                                 </div>
                             </a>
                         </li>

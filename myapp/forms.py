@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
-from .models import Location, Company, Partner, Lead, UserProfile, Client
+from .models import Location, Company, Partner, Lead, UserProfile, Client, Product
 
 
 class LocationForm(forms.ModelForm):
@@ -89,6 +89,42 @@ class PartnerForm(forms.ModelForm):
             'phone': forms.TextInput(attrs={'class': 'form-control', 'id': 'partner-phone'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'id': 'partner-address', 'rows': 3}),
         }
+
+
+class ProductForm(forms.ModelForm):
+    companies = forms.ModelMultipleChoiceField(
+        queryset=Company.objects.filter(is_deleted=False, is_draft=False).order_by('-created_at'),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-select js-choice', 'id': 'product-companies'})
+    )
+
+    locations = forms.ModelMultipleChoiceField(
+        queryset=Location.objects.filter(is_deleted=False, is_draft=False).order_by('-created_at'),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-select js-choice', 'id': 'product-locations'})
+    )
+
+    class Meta:
+        model = Product
+        fields = ['name', 'sku', 'description', 'status', 'companies', 'locations']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'id': 'product-name', 'required': True}),
+            'sku': forms.TextInput(attrs={'class': 'form-control', 'id': 'product-sku', 'required': True}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'id': 'product-description', 'rows': 4}),
+            'status': forms.Select(attrs={'class': 'form-select', 'id': 'product-status'}),
+        }
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if commit:
+            instance.save()
+            comps = self.cleaned_data.get('companies')
+            locs = self.cleaned_data.get('locations')
+            if comps is not None:
+                instance.companies.set(comps)
+            if locs is not None:
+                instance.locations.set(locs)
+        return instance
 
 
 class LeadForm(forms.ModelForm):

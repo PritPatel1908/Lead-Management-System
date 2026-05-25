@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
-from .models import Location, Company, Lead, LeadPartner, LeadFollowup, LeadMeetingSchedule, LeadCommissionSlab, UserProfile
+from .models import Location, Company, Lead, LeadPartner, LeadFollowup, LeadMeetingSchedule, LeadCommissionSlab, UserProfile, Product, ProductCompany, ProductLocation
 
 
 class LocationAdmin(admin.ModelAdmin):
@@ -99,3 +99,24 @@ except Exception:
 	pass
 
 admin.site.register(User, CustomUserAdmin)
+
+
+class ProductCompanyInline(admin.TabularInline):
+	model = ProductCompany
+	extra = 1
+
+
+class ProductLocationInline(admin.TabularInline):
+	model = ProductLocation
+	extra = 1
+
+
+class ProductAdmin(admin.ModelAdmin):
+	list_display = ('name', 'sku', 'status', 'is_draft', 'is_deleted', 'created_at')
+	list_filter = ('status', 'is_draft', 'is_deleted')
+	search_fields = ('name', 'sku')
+	inlines = (ProductCompanyInline, ProductLocationInline)
+	list_per_page = 25
+
+
+admin.site.register(Product, ProductAdmin)

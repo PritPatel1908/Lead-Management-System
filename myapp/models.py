@@ -22,8 +22,8 @@ class Location(models.Model):
 	is_draft = models.BooleanField(default=False)
 	# soft-delete flag: when True the record is considered deleted
 	is_deleted = models.BooleanField(default=False)
-	created_at = models.DateTimeField(auto_now_add=True)
-	updated_at = models.DateTimeField(auto_now=True)
+	created_at = models.DateTimeField(auto_now_add=True, null=True)
+	updated_at = models.DateTimeField(auto_now=True, null=True)
 
 	class Meta:
 		ordering = ['-created_at']
@@ -370,7 +370,91 @@ class LeadBilling(models.Model):
 			return f"{self.lead.lead_unique_id} - {self.lead_for} - {self.amount}"
 		except Exception:
 			return str(self.pk)
+class Product(models.Model):
+	name = models.CharField(max_length=255)
+	sku = models.CharField(max_length=128, blank=True)
+	description = models.TextField(blank=True)
+	# status like other master models
+	STATUS_ACTIVE = 'active'
+	STATUS_INACTIVE = 'inactive'
+	STATUS_CHOICES = [
+		(STATUS_ACTIVE, 'Active'),
+		(STATUS_INACTIVE, 'Inactive'),
+	]
+	status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+	# Draft and soft-delete flags for product lifecycle
+	is_draft = models.BooleanField(default=False)
+	is_deleted = models.BooleanField(default=False)
+	# Relations to Company and Location (many-to-many join tables)
+	companies = models.ManyToManyField('Company', through='ProductCompany', related_name='products', blank=True)
+	locations = models.ManyToManyField('Location', through='ProductLocation', related_name='products', blank=True)
+	# Timestamps to support ordering and UI
+	created_at = models.DateTimeField(auto_now_add=True, null=True)
+	updated_at = models.DateTimeField(auto_now=True, null=True)
 
+	class Meta:
+		db_table = 'product'
+		ordering = ['-created_at']
+		verbose_name = 'Product'
+		verbose_name_plural = 'Products'
+
+	def __str__(self):
+		try:
+			return self.name
+		except Exception:
+			return str(self.pk)
+
+
+
+class ProductCompany(models.Model):
+	product = models.ForeignKey('Product', on_delete=models.CASCADE)
+	company = models.ForeignKey(Company, on_delete=models.CASCADE)
+
+	class Meta:
+		db_table = 'product_company'
+		verbose_name = 'Product Company'
+		verbose_name_plural = 'Product Companies'
+		unique_together = ('product', 'company')
+
+	def __str__(self):
+		try:
+			return f"{self.product.name} - {self.company.name}"
+		except Exception:
+			return str(self.pk)
+
+
+class ProductLocation(models.Model):
+	product = models.ForeignKey('Product', on_delete=models.CASCADE)
+	location = models.ForeignKey(Location, on_delete=models.CASCADE)
+
+	class Meta:
+		db_table = 'product_location'
+		verbose_name = 'Product Location'
+		verbose_name_plural = 'Product Locations'
+		unique_together = ('product', 'location')
+
+	def __str__(self):
+		try:
+			return f"{self.product.name} - {self.location.name}"
+		except Exception:
+			return str(self.pk)
+
+
+class LeadBillingProduct(models.Model):
+	lead_billing = models.ForeignKey('LeadBilling', on_delete=models.CASCADE, related_name='products')
+	product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='lead_billing_links')
+
+	class Meta:
+		db_table = 'lead_billing_product'
+		verbose_name = 'Lead Billing Product'
+		verbose_name_plural = 'Lead Billing Products'
+		ordering = ['-id']
+
+	def __str__(self):
+		try:
+			return f"{self.lead_billing_id} - {self.product.name}"
+		except Exception:
+			return str(self.pk)
 
 class UserProfile(models.Model):
 	user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')

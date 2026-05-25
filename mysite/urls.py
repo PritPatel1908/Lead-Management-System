@@ -42,6 +42,13 @@ urlpatterns = [
     path('companies/detail/', myapp_views.company_detail, name='company_detail'),
     path('companies/delete/', myapp_views.delete_company, name='delete_company'),
     path('companies/restore/', myapp_views.restore_company, name='restore_company'),
+    # Products
+    path('products/', myapp_views.product_list, name='product_list'),
+    path('products/add/', myapp_views.add_product, name='add_product'),
+    path('products/edit/', myapp_views.add_product, name='edit_product'),
+    path('products/detail/', myapp_views.product_detail, name='product_detail'),
+    path('products/delete/', myapp_views.delete_product, name='delete_product'),
+    path('products/restore/', myapp_views.restore_product, name='restore_product'),
     # Partners
     path('partners/', myapp_views.partner_list, name='partner_list'),
     path('partners/add/', myapp_views.add_partner, name='add_partner'),
