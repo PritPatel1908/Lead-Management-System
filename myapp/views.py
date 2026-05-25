@@ -1277,10 +1277,36 @@ def add_lead(request):
 						ctval_raw = ''
 					ct_val = _parse_decimal(ctval_raw)
 
+					# commission credit term keys (per-slot, per-lead_for, or generic)
+					credit_key_id = f'commission_credit_{getattr(lb, "id", "")}'
+					credit_key_lf = f'commission_credit_{(getattr(lb, "lead_for", "") or "").strip()}'
+					try:
+						credit_raw = (post_data.get(credit_key_id) or post_data.get(credit_key_lf) or post_data.get('commission_credit') or '')
+						credit_raw = (credit_raw or '').strip()
+					except Exception:
+						credit_raw = ''
+					credit_val = credit_raw or None
+					# commission credit term value keys (per-slot, per-lead_for, or generic)
+					credit_val_key_id = f'commission_credit_value_{getattr(lb, "id", "")}'
+					credit_val_key_lf = f'commission_credit_value_{(getattr(lb, "lead_for", "") or "").strip()}'
+					try:
+						credit_val_raw = (post_data.get(credit_val_key_id) or post_data.get(credit_val_key_lf) or post_data.get('commission_credit_value') or '')
+						credit_val_raw = (credit_val_raw or '').strip()
+					except Exception:
+						credit_val_raw = ''
+					credit_term_val = _parse_decimal(credit_val_raw)
+
 					# find existing slab for this billing
 					slab = LeadCommissionSlab.objects.filter(lead=lead, lead_billing=lb).first()
 					if slab:
 						changed = False
+						# persist credit-term when changed
+						try:
+							if credit_val is not None and getattr(slab, 'lead_commission_credit_term_condition', None) != credit_val:
+								slab.lead_commission_credit_term_condition = credit_val
+								changed = True
+						except Exception:
+							pass
 						if ct:
 							if slab.lead_commission_type != ct:
 								slab.lead_commission_type = ct
@@ -1327,6 +1353,25 @@ def add_lead(request):
 							if getattr(slab, 'lead_commission_type_value', None) is not None:
 								slab.lead_commission_type_value = None
 								changed = True
+						# persist credit-term value when applicable
+						try:
+							current_credit = getattr(slab, 'lead_commission_credit_term_condition', None)
+							if current_credit in (LeadCommissionSlab.CREDIT_AFTER_PERCENT_COMPLETE, LeadCommissionSlab.CREDIT_AFTER_FEW_DAYS):
+								if credit_term_val is not None:
+									if slab.lead_commission_credit_term_condition_value is None or slab.lead_commission_credit_term_condition_value != credit_term_val:
+										slab.lead_commission_credit_term_condition_value = credit_term_val
+										changed = True
+								else:
+									if getattr(slab, 'lead_commission_credit_term_condition_value', None) is not None:
+										slab.lead_commission_credit_term_condition_value = None
+										changed = True
+							else:
+								# clear any stale value when credit-term is not one that accepts a value
+								if getattr(slab, 'lead_commission_credit_term_condition_value', None) is not None:
+									slab.lead_commission_credit_term_condition_value = None
+									changed = True
+						except Exception:
+							pass
 						if changed:
 							slab.save()
 					else:
@@ -1334,7 +1379,7 @@ def add_lead(request):
 							create_kwargs = {
 								'lead': lead,
 								'lead_commission_type': ct,
-								'lead_commission_credit_term_condition': LeadCommissionSlab.CREDIT_AFTER_BILLING,
+								'lead_commission_credit_term_condition': (credit_val or LeadCommissionSlab.CREDIT_AFTER_BILLING),
 								'lead_billing': lb
 							}
 							# mark whether the slab is percentage-based — treat recurring-like as percentage only when toggle set
@@ -1351,6 +1396,12 @@ def add_lead(request):
 									create_kwargs['lead_commission_type_value'] = ct_val
 								if amt_val is not None:
 									create_kwargs['commission_amount'] = amt_val
+							# If credit-term accepts a numeric value, include it for creation
+							try:
+								if credit_term_val is not None and (create_kwargs.get('lead_commission_credit_term_condition') in (LeadCommissionSlab.CREDIT_AFTER_PERCENT_COMPLETE, LeadCommissionSlab.CREDIT_AFTER_FEW_DAYS)):
+									create_kwargs['lead_commission_credit_term_condition_value'] = credit_term_val
+							except Exception:
+								pass
 							LeadCommissionSlab.objects.create(**create_kwargs)
 			except Exception:
 				# swallow errors so lead save isn't blocked
@@ -1385,6 +1436,8 @@ def add_lead(request):
 								'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
 								'commission_type_value': getattr(slab, 'lead_commission_type_value', None) if slab else None,
 								'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+								'commission_credit_term_condition_value': getattr(slab, 'lead_commission_credit_term_condition_value', None) if slab else None,
+								'commission_credit_value': getattr(slab, 'lead_commission_credit_term_condition_value', None) if slab else None,
 								'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 								'slab_id': getattr(slab, 'id', None) if slab else None,
 								'products': list(LeadBillingProduct.objects.filter(lead_billing=b).values_list('product_id', flat=True)),
@@ -1413,6 +1466,8 @@ def add_lead(request):
 								'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
 								'commission_type_value': getattr(slab, 'lead_commission_type_value', None) if slab else None,
 								'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+								'commission_credit_term_condition_value': getattr(slab, 'lead_commission_credit_term_condition_value', None) if slab else None,
+								'commission_credit_value': getattr(slab, 'lead_commission_credit_term_condition_value', None) if slab else None,
 								'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 								'slab_id': getattr(slab, 'id', None) if slab else None,
 								'products': list(LeadBillingProduct.objects.filter(lead_billing=b).values_list('product_id', flat=True)),
@@ -1497,6 +1552,10 @@ def add_lead(request):
 	selected_custome_month_hardware = None
 	# selected commission type (populated from POST or existing LeadCommissionSlab)
 	selected_commission_type = ''
+	# selected commission credit term (from LeadCommissionSlab.CREDIT_CHOICES)
+	selected_commission_credit = ''
+	# selected commission credit term numeric value (percentage or days)
+	selected_commission_credit_value = None
 	selected_is_peremp_wise_software = False
 	selected_peremp_amount_software = 0
 	selected_emp_count_software = 0
@@ -1572,6 +1631,9 @@ def add_lead(request):
 				# commission type posted from the commission tab
 				if request.POST.get('commission_type') is not None:
 					selected_commission_type = (request.POST.get('commission_type') or '').strip()
+				# commission credit term posted from the commission tab
+				if request.POST.get('commission_credit') is not None:
+					selected_commission_credit = (request.POST.get('commission_credit') or '').strip()
 			except Exception:
 				pass
 		else:
@@ -1645,6 +1707,18 @@ def add_lead(request):
 							first = lcs.first()
 							if first and getattr(first, 'lead_commission_type', None):
 								selected_commission_type = getattr(first, 'lead_commission_type') or ''
+								# also derive selected commission credit term when available
+								try:
+									if first and getattr(first, 'lead_commission_credit_term_condition', None):
+										selected_commission_credit = getattr(first, 'lead_commission_credit_term_condition') or ''
+								except Exception:
+									pass
+									# also derive selected commission credit term numeric value when present
+									try:
+										if first and getattr(first, 'lead_commission_credit_term_condition_value', None) is not None:
+											selected_commission_credit_value = getattr(first, 'lead_commission_credit_term_condition_value')
+									except Exception:
+										pass
 					except Exception:
 						pass
 	except Exception:
@@ -1679,6 +1753,8 @@ def add_lead(request):
 					'commission_type': getattr(slab, 'lead_commission_type', '') if slab else '',
 					'commission_type_value': getattr(slab, 'lead_commission_type_value', None) if slab else None,
 					'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
+					'commission_credit': getattr(slab, 'lead_commission_credit_term_condition', '') if slab else '',
+					'commission_credit_value': getattr(slab, 'lead_commission_credit_term_condition_value', None) if slab else None,
 					'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 					'slab_id': getattr(slab, 'id', None) if slab else None,
 					'selected_products': selected_products,
@@ -1697,7 +1773,11 @@ def add_lead(request):
 		'selected_is_peremp_wise': selected_is_peremp_wise,
 		# commission choices pulled from model
 		'commission_type_choices': LeadCommissionSlab.TYPE_CHOICES,
+		# credit-term choices from model
+		'commission_credit_choices': LeadCommissionSlab.CREDIT_CHOICES,
 		'selected_commission_type': selected_commission_type,
+		'selected_commission_credit': selected_commission_credit,
+		'selected_commission_credit_value': selected_commission_credit_value,
 		# billing type choices for template
 		'bill_type_choices': LeadBilling.BILL_TYPE_CHOICES,
 		# billing frequency selected values (from POST or LeadBilling rows)

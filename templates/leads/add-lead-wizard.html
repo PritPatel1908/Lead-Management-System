@@ -770,6 +770,27 @@
                             <input type="number" step="0.01" min="0" max="100" class="form-control commission-percentage-input" name="commission_type_value_{{ b.id }}" id="commission_percentage_{{ b.id }}" value="{% if b.commission_type_value is not None %}{{ b.commission_type_value }}{% endif %}" />
                             <div class="form-text">Commission will be calculated from Amount Summary.</div>
                           </div>
+                          <div class="mb-3 mt-2">
+                            <label class="form-label" for="commission_credit_{{ b.id }}">Credit Term</label>
+                            <select class="form-select" name="commission_credit_{{ b.id }}" id="commission_credit_{{ b.id }}">
+                              <option value="">Select Credit Term</option>
+                              {% if commission_credit_choices %}
+                                {% for val,label in commission_credit_choices %}
+                                  <option value="{{ val }}" {% if b.commission_credit == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                              {% else %}
+                                <option value="after_billing">After Billing</option>
+                                <option value="before_billing">Before Billing</option>
+                                <option value="after_billing_percentage_complate">After Billing Percentage Complete</option>
+                                <option value="after_billing_few_days">After Billing Few Days</option>
+                              {% endif %}
+                            </select>
+                          </div>
+                          <div class="mb-3 mt-2" id="commission_credit_value_wrapper_{{ b.id }}" style="{% if b.commission_credit == 'after_billing_percentage_complate' or b.commission_credit == 'after_billing_few_days' %}display:block;{% else %}display:none;{% endif %}">
+                            <label class="form-label" for="commission_credit_value_{{ b.id }}">{% if b.commission_credit == 'after_billing_percentage_complate' %}Credit Term Percantage{% elif b.commission_credit == 'after_billing_few_days' %}Credit Term Days{% else %}Credit Term Value{% endif %}</label>
+                            <input type="number" step="0.01" min="0" class="form-control" name="commission_credit_value_{{ b.id }}" id="commission_credit_value_{{ b.id }}" value="{% if b.commission_credit_value is not None %}{{ b.commission_credit_value }}{% endif %}" />
+                            <div class="form-text">Enter percentage (for percentage complete) or days (for few days).</div>
+                          </div>
                           <!-- Per-slot commission summary -->
                           <div class="mt-2" id="commission_slot_summary_{{ b.id }}">
                             <div class="bg-light rounded-2 p-2" style="border:1px solid #eef2f6;">
@@ -816,6 +837,28 @@
                           <label class="form-label" for="commission_percentage">Percentage Value (%)</label>
                           <input type="number" step="0.01" min="0" max="100" class="form-control" name="commission_type_value" id="commission_percentage" value="" />
                           <div class="form-text">Commission will be calculated from Amount Summary.</div>
+                        </div>
+                        <div class="mb-3 mt-2">
+                          <label class="form-label" for="commission_credit">Credit Term</label>
+                          <select class="form-select" name="commission_credit" id="commission_credit">
+                            <option value="">Select Credit Term</option>
+                            {% if commission_credit_choices %}
+                              {% for val,label in commission_credit_choices %}
+                                <option value="{{ val }}" {% if selected_commission_credit == val %}selected{% endif %}>{{ label }}</option>
+                              {% endfor %}
+                            {% else %}
+                              <option value="after_billing">After Billing</option>
+                              <option value="before_billing">Before Billing</option>
+                              <option value="after_billing_percentage_complate">After Billing Percentage Complete</option>
+                              <option value="after_billing_few_days">After Billing Few Days</option>
+                            {% endif %}
+                          </select>
+                        </div>
+                        <div class="mb-3 mt-2" id="commission_credit_value_wrapper" style="{% if selected_commission_credit == 'after_billing_percentage_complate' or selected_commission_credit == 'after_billing_few_days' %}display:block;{% else %}display:none;{% endif %}">
+                          <label class="form-label" for="commission_credit_value">{% if selected_commission_credit == 'after_billing_percentage_complate' %}Credit Term Percantage{% elif selected_commission_credit == 'after_billing_few_days' %}Credit Term Days{% else %}Credit Term Value{% endif %}</label>
+                          <input type="number" step="0.01" min="0" class="form-control" name="commission_credit_value" id="commission_credit_value" value="{% if selected_commission_credit_value is not None %}{{ selected_commission_credit_value }}{% endif %}" />
+                          <div class="form-text">Enter percentage (for percentage complete) or days (for few days).</div>
+                        </div>
                         </div>
                         <!-- Products selection removed from Commission Slab per request -->
                       </div>
@@ -1186,6 +1229,37 @@
                 }catch(e){}
               }catch(e){}
             });
+
+            // Attach handlers to credit-term selects (initial page load)
+            try{
+              function _handleCreditSelectChange(sel){
+                try{
+                  var val = sel.value || '';
+                  var id = (sel.id || '').replace('commission_credit_','');
+                  if (sel.id === 'commission_credit'){
+                    var wrapper = document.getElementById('commission_credit_value_wrapper');
+                    var inp = document.getElementById('commission_credit_value');
+                    if (val === 'after_billing_percentage_complate' || val === 'after_billing_few_days'){
+                      if (wrapper) wrapper.style.display = 'block';
+                      // update label
+                      try{ var lab = wrapper ? wrapper.querySelector('label.form-label') : null; if (lab){ if (val === 'after_billing_percentage_complate') lab.textContent = 'Credit Term Percantage'; else if (val === 'after_billing_few_days') lab.textContent = 'Credit Term Days'; else lab.textContent = 'Credit Term Value'; } }catch(e){}
+                    } else {
+                      if (wrapper) wrapper.style.display = 'none'; if (inp) inp.value = '';
+                      try{ var lab = wrapper ? wrapper.querySelector('label.form-label') : null; if (lab) lab.textContent = 'Credit Term Value'; }catch(e){}
+                    }
+                  } else {
+                    var wrapper = document.getElementById('commission_credit_value_wrapper_' + id);
+                    var inp = document.getElementById('commission_credit_value_' + id);
+                    if (val === 'after_billing_percentage_complate' || val === 'after_billing_few_days'){
+                      if (wrapper) wrapper.style.display = 'block';
+                      try{ var lab = wrapper ? wrapper.querySelector('label.form-label') : null; if (lab){ if (val === 'after_billing_percentage_complate') lab.textContent = 'Credit Term Percantage'; else if (val === 'after_billing_few_days') lab.textContent = 'Credit Term Days'; else lab.textContent = 'Credit Term Value'; } }catch(e){}
+                    } else { if (wrapper) wrapper.style.display = 'none'; if (inp) inp.value = ''; }
+                  }
+                }catch(e){}
+              }
+              var creditSelectsInit = document.querySelectorAll('select[name^="commission_credit"]');
+              creditSelectsInit.forEach(function(sel){ try{ sel.addEventListener('change', function(){ _handleCreditSelectChange(sel); }); _handleCreditSelectChange(sel); }catch(e){} });
+            }catch(e){}
 
             // Single generic commission select (also handle percentage)
             var single = document.getElementById('bootstrap-wizard-commission-type');
@@ -2044,6 +2118,20 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
   ];
 
+  // Commission credit-term choices available to client for rebuilding the Commission tab
+  var COMMISSION_CREDIT_CHOICES = [
+    {% if commission_credit_choices %}
+      {% for val,label in commission_credit_choices %}
+        { value: "{{ val|escapejs }}", label: "{{ label|escapejs }}" }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    {% else %}
+      { value: "after_billing", label: "After Billing" },
+      { value: "before_billing", label: "Before Billing" },
+      { value: "after_billing_percentage_complate", label: "After Billing Percentage Complete" },
+      { value: "after_billing_few_days", label: "After Billing Few Days" }
+    {% endif %}
+  ];
+
   function rebuildCommissionTab(billing) {
     // These helpers are defined in a different DOMContentLoaded scope (line ~948).
     // Create local aliases from the window globals so all calls below work correctly.
@@ -2074,6 +2162,29 @@ document.addEventListener('DOMContentLoaded', function() {
           html += '<div class="form-check form-switch ms-3 mb-0" id="commission_is_percentage_wrapper_' + id + '" style="' + ((b.commission_type === 'recurring' || b.commission_type === 'only_for_first_billing' || b.commission_type === 'every_billing') ? 'display:block;' : 'display:none;') + '">';
           html += '<input class="form-check-input commission-is-percentage-toggle" type="checkbox" id="commission_is_percentage_' + id + '" name="commission_is_percentage_' + id + '"' + ((b.commission_type === 'percentage_wise' || (typeof b.commission_type_value !== 'undefined' && b.commission_type_value)) ? ' checked' : '') + ' />';
           html += '<label class="form-check-label mb-0 ms-2" for="commission_is_percentage_' + id + '">Is Percentage Wise?</label>';
+          html += '</div>';
+
+          // add credit-term select to mirror server-rendered markup
+          html += '<div class="mb-3 mt-2" id="commission_credit_wrapper_' + id + '">';
+          html += '<label class="form-label" for="commission_credit_' + id + '">Credit Term</label>';
+          html += '<select class="form-select" name="commission_credit_' + id + '" id="commission_credit_' + id + '">';
+          html += '<option value="">Select Credit Term</option>';
+          COMMISSION_CREDIT_CHOICES.forEach(function(opt){
+            var sel = (b.commission_credit && b.commission_credit === opt.value) ? ' selected' : '';
+            html += '<option value="' + opt.value + '"' + sel + '>' + opt.label + '</option>';
+          });
+          html += '</select>';
+          html += '</div>';
+          // add optional credit-term numeric input (percentage / days) when applicable
+          var showCreditVal = (b.commission_credit === 'after_billing_percentage_complate' || b.commission_credit === 'after_billing_few_days');
+          var creditVal = (typeof b.commission_credit_value !== 'undefined' && b.commission_credit_value !== null) ? String(b.commission_credit_value) : '';
+          html += '<div class="mb-3 mt-2" id="commission_credit_value_wrapper_' + id + '" style="' + (showCreditVal ? 'display:block;' : 'display:none;') + '">';
+          var creditLabel = 'Credit Term Value';
+          if (b.commission_credit === 'after_billing_percentage_complate') creditLabel = 'Credit Term Percantage';
+          else if (b.commission_credit === 'after_billing_few_days') creditLabel = 'Credit Term Days';
+          html += '<label class="form-label" for="commission_credit_value_' + id + '">' + creditLabel + '</label>';
+          html += '<input type="number" step="0.01" min="0" class="form-control" name="commission_credit_value_' + id + '" id="commission_credit_value_' + id + '" value="' + creditVal + '" />';
+          html += '<div class="form-text">Enter percentage (for percentage complete) or days (for few days).</div>';
           html += '</div>';
           html += '</div>';
 
@@ -2117,6 +2228,28 @@ document.addEventListener('DOMContentLoaded', function() {
         html += '<input class="form-check-input commission-is-percentage-toggle" type="checkbox" id="commission_is_percentage" name="commission_is_percentage" ' + (("{{ selected_commission_type|escapejs }}" === 'percentage_wise') ? 'checked' : '') + ' />';
         html += '<label class="form-check-label mb-0 ms-2" for="commission_is_percentage">Is Percentage Wise?</label>';
         html += '</div>';
+        html += '</div>';
+        
+        // add generic credit-term select for single fallback
+        html += '<div class="mb-3 mt-2">';
+        html += '<label class="form-label" for="commission_credit">Credit Term</label>';
+        html += '<select class="form-select" name="commission_credit" id="commission_credit">';
+        html += '<option value="">Select Credit Term</option>';
+        COMMISSION_CREDIT_CHOICES.forEach(function(opt){
+          var sel = ("{{ selected_commission_credit|escapejs }}" && "{{ selected_commission_credit|escapejs }}" === opt.value) ? ' selected' : '';
+          html += '<option value="' + opt.value + '"' + sel + '>' + opt.label + '</option>';
+        });
+        html += '</select>';
+        html += '</div>';
+
+        // generic credit-term numeric input for single fallback
+        var genericCreditLabel = 'Credit Term Value';
+        if ("{{ selected_commission_credit|escapejs }}" === 'after_billing_percentage_complate') genericCreditLabel = 'Credit Term Percantage';
+        else if ("{{ selected_commission_credit|escapejs }}" === 'after_billing_few_days') genericCreditLabel = 'Credit Term Days';
+        html += '<div class="mb-3 mt-2" id="commission_credit_value_wrapper" style="' + (("{{ selected_commission_credit|escapejs }}" === 'after_billing_percentage_complate' || "{{ selected_commission_credit|escapejs }}" === 'after_billing_few_days') ? 'display:block;' : 'display:none;') + '">';
+        html += '<label class="form-label" for="commission_credit_value">' + genericCreditLabel + '</label>';
+        html += '<input type="number" step="0.01" min="0" class="form-control" name="commission_credit_value" id="commission_credit_value" value="' + ("{{ selected_commission_credit_value|default_if_none:''|escapejs }}" || '') + '" />';
+        html += '<div class="form-text">Enter percentage (for percentage complete) or days (for few days).</div>';
         html += '</div>';
 
         // include generic percentage wrapper for single fallback
@@ -2221,6 +2354,38 @@ document.addEventListener('DOMContentLoaded', function() {
             try{ var amtElInit = document.getElementById('commission_slot_amount_' + id); var amtInputInit = document.getElementById('commission_amount_' + id); if (amtElInit){ var v = (amtInputInit && amtInputInit.value) ? amtInputInit.value : ''; var n = parseFloat(v); amtElInit.textContent = (v !== '' ? (isNaN(n) ? v : n.toFixed(2)) : ((sel.value === 'fix_amount') ? '0.00' : '--')); } }catch(e){}
           }catch(e){}
         });
+        // attach credit-term handlers for rebuilt markup inside container
+        try{
+          var rebuiltCreditSelects = container.querySelectorAll('select[name^="commission_credit"]');
+          rebuiltCreditSelects.forEach(function(sel){
+            try{
+              var localHandle = function(){
+                try{
+                  var val = sel.value || '';
+                  var id = (sel.id || '').replace('commission_credit_','');
+                  if (sel.id === 'commission_credit'){
+                    var wrapper = document.getElementById('commission_credit_value_wrapper');
+                    var inp = document.getElementById('commission_credit_value');
+                    if (val === 'after_billing_percentage_complate' || val === 'after_billing_few_days'){
+                      if (wrapper) wrapper.style.display = 'block';
+                          try{ var lab = wrapper ? wrapper.querySelector('label.form-label') : null; if (lab){ if (val === 'after_billing_percentage_complate') lab.textContent = 'Credit Term Percantage'; else if (val === 'after_billing_few_days') lab.textContent = 'Credit Term Days'; else lab.textContent = 'Credit Term Value'; } }catch(e){}
+                    } else { if (wrapper) wrapper.style.display = 'none'; if (inp) inp.value = ''; }
+                  } else {
+                    var wrapper = document.getElementById('commission_credit_value_wrapper_' + id);
+                    var inp = document.getElementById('commission_credit_value_' + id);
+                    if (val === 'after_billing_percentage_complate' || val === 'after_billing_few_days'){
+                      if (wrapper) wrapper.style.display = 'block';
+                          try{ var lab = wrapper ? wrapper.querySelector('label.form-label') : null; if (lab){ if (val === 'after_billing_percentage_complate') lab.textContent = 'Credit Term Percantage'; else if (val === 'after_billing_few_days') lab.textContent = 'Credit Term Days'; else lab.textContent = 'Credit Term Value'; } }catch(e){}
+                    } else { if (wrapper) wrapper.style.display = 'none'; if (inp) inp.value = ''; }
+                  }
+                }catch(e){}
+              };
+              sel.addEventListener('change', localHandle);
+              // initialize
+              localHandle();
+            }catch(e){}
+          });
+        }catch(e){}
         var singleSel = document.getElementById('bootstrap-wizard-commission-type');
         var singleWrap = document.getElementById('commission_amount_wrapper');
         if (singleSel && (singleWrap || document.getElementById('commission_percentage_wrapper'))){
