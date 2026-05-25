@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model, authenticate, login
 from django.views.decorators.csrf import csrf_protect
 from django.conf import settings
 from .forms import LocationForm, CompanyForm, PartnerForm, LeadForm, UserRegistrationForm, EditUserForm, ProductForm
-from .models import Location, Company, Partner, Lead, LeadPartner, UserProfile, Client, LeadCommissionSlab, LeadBilling, Product
+from .models import Location, Company, Partner, Lead, LeadPartner, UserProfile, Client, LeadCommissionSlab, LeadBilling, Product, LeadBillingProduct
 
 
 def _save_lead_billing_from_post(lead, post):
@@ -357,8 +357,9 @@ def _save_lead_billing_from_post(lead, post):
 						existing.custome_month = d.get('custome_month', getattr(existing, 'custome_month', None))
 						existing.save()
 						updated += 1
+					obj = existing
 				else:
-					LeadBilling.objects.create(
+					obj = LeadBilling.objects.create(
 						lead=lead,
 						lead_for=lf,
 						is_for_software=d.get('is_for_software', False),
@@ -371,10 +372,72 @@ def _save_lead_billing_from_post(lead, post):
 						custome_month=d.get('custome_month', None)
 					)
 					created += 1
-			# remove any existing billing rows not in desired set
-			for ex in existing_lbs:
-				if getattr(ex, 'lead_for', None) not in to_keep:
-					ex.delete()
+
+				# Persist product selections for this LeadBilling row when provided in POST
+				try:
+					# decide which POST keys to consider (id-based, lead_for-based, generic)
+					product_keys = []
+					try:
+						if obj and getattr(obj, 'id', None):
+							product_keys.append(f'products_{getattr(obj, "id", "")}')
+					except Exception:
+						pass
+					if lf:
+						product_keys.append(f'products_{lf}')
+					product_keys.append('products')
+
+					# helper to read list-like values from POST
+					def _read_list_for_keys(*keys):
+						for k in keys:
+							if not k:
+								continue
+							try:
+								vals = post.getlist(k)
+							except Exception:
+								v = post.get(k)
+								if v in (None, ''):
+									vals = []
+								else:
+									if isinstance(v, str) and ',' in v:
+										vals = [x.strip() for x in v.split(',') if x.strip()]
+									else:
+										vals = [v]
+							# normalize and yield ids
+							ids = []
+							for vv in vals:
+								if vv in (None, ''):
+									continue
+								try:
+									ids.append(int(str(vv).strip()))
+								except Exception:
+									continue
+							if ids:
+								return ids
+						return []
+
+					selected_ids = _read_list_for_keys(*product_keys)
+					if selected_ids:
+						# validate product ids
+						valid_ids = list(Product.objects.filter(id__in=selected_ids).values_list('id', flat=True))
+						# current linked product ids
+						cur_ids = list(LeadBillingProduct.objects.filter(lead_billing=obj).values_list('product_id', flat=True))
+						to_add = set(valid_ids) - set(cur_ids)
+						to_remove = set(cur_ids) - set(valid_ids)
+						for pid in to_add:
+							try:
+								LeadBillingProduct.objects.create(lead_billing=obj, product_id=pid)
+							except Exception:
+								pass
+						if to_remove:
+							LeadBillingProduct.objects.filter(lead_billing=obj, product_id__in=list(to_remove)).delete()
+				except Exception:
+					# swallow product persistence errors to avoid blocking billing save
+						pass
+
+		# remove any existing billing rows not in desired set
+		for ex in existing_lbs:
+			if getattr(ex, 'lead_for', None) not in to_keep:
+				ex.delete()
 	except Exception:
 		# swallow errors so lead save isn't blocked
 		pass
@@ -1255,9 +1318,14 @@ def add_lead(request):
 									slab.commission_amount = amt_val
 									changed = True
 						# For recurring-like types with toggle OFF, accept explicit amt_val as fix amount
-						if ct in (LeadCommissionSlab.TYPE_RECURRING, LeadCommissionSlab.TYPE_ONLY_FIRST, LeadCommissionSlab.TYPE_EVERY_BILLING) and (not is_pct_toggle) and amt_val is not None:
-							if slab.commission_amount is None or slab.commission_amount != amt_val:
-								slab.commission_amount = amt_val
+						# and clear any stale percentage value from the database
+						if ct in (LeadCommissionSlab.TYPE_RECURRING, LeadCommissionSlab.TYPE_ONLY_FIRST, LeadCommissionSlab.TYPE_EVERY_BILLING) and (not is_pct_toggle):
+							if amt_val is not None:
+								if slab.commission_amount is None or slab.commission_amount != amt_val:
+									slab.commission_amount = amt_val
+									changed = True
+							if getattr(slab, 'lead_commission_type_value', None) is not None:
+								slab.lead_commission_type_value = None
 								changed = True
 						if changed:
 							slab.save()
@@ -1319,6 +1387,7 @@ def add_lead(request):
 								'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
 								'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 								'slab_id': getattr(slab, 'id', None) if slab else None,
+								'products': list(LeadBillingProduct.objects.filter(lead_billing=b).values_list('product_id', flat=True)),
 							})
 					except Exception:
 						billing_rows = []
@@ -1346,6 +1415,7 @@ def add_lead(request):
 								'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
 								'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 								'slab_id': getattr(slab, 'id', None) if slab else None,
+								'products': list(LeadBillingProduct.objects.filter(lead_billing=b).values_list('product_id', flat=True)),
 							})
 					except Exception:
 						billing_rows = []
@@ -1414,6 +1484,10 @@ def add_lead(request):
 	selected_peremp_amount = 0
 	selected_emp_count = 0
 	selected_another_amount = 0
+	# selected product lists for Details tab pre-selection
+	selected_products = []
+	selected_products_software = []
+	selected_products_hardware = []
 	# billing frequency selections
 	selected_bill_type = ''
 	selected_custome_month = None
@@ -1454,6 +1528,25 @@ def add_lead(request):
 					selected_another_amount_software = request.POST.get('another_amount_software')
 				if request.POST.get('another_amount_hardware') is not None:
 					selected_another_amount_hardware = request.POST.get('another_amount_hardware')
+				# copy posted product selections so form redisplay keeps values
+				try:
+					vals = request.POST.getlist('products')
+					if vals:
+						selected_products = [int(x) for x in vals if x not in (None, '')]
+				except Exception:
+					pass
+				try:
+					vals = request.POST.getlist('products_software')
+					if vals:
+						selected_products_software = [int(x) for x in vals if x not in (None, '')]
+				except Exception:
+					pass
+				try:
+					vals = request.POST.getlist('products_hardware')
+					if vals:
+						selected_products_hardware = [int(x) for x in vals if x not in (None, '')]
+				except Exception:
+					pass
 				# billing frequency posted values
 				if request.POST.get('bill_type') is not None:
 					selected_bill_type = (request.POST.get('bill_type') or '').strip()
@@ -1505,6 +1598,11 @@ def add_lead(request):
 								selected_peremp_amount_software = getattr(b, 'peremp_amount', 0) or 0
 								selected_emp_count_software = getattr(b, 'emp_count', 0) or 0
 								selected_another_amount_software = getattr(b, 'another_amount', 0) or 0
+								# selected products for software slot
+								try:
+									selected_products_software = list(LeadBillingProduct.objects.filter(lead_billing=b).values_list('product_id', flat=True))
+								except Exception:
+									selected_products_software = []
 								# billing frequency values from existing LeadBilling
 								selected_bill_type_software = getattr(b, 'bill_type', '') or ''
 								selected_custome_month_software = getattr(b, 'custome_month', None)
@@ -1519,6 +1617,11 @@ def add_lead(request):
 								selected_custome_month_hardware = getattr(b, 'custome_month', None)
 								# mirror for single hardware-only case
 								selected_another_amount = selected_another_amount_hardware
+								# selected products for hardware slot
+								try:
+									selected_products_hardware = list(LeadBillingProduct.objects.filter(lead_billing=b).values_list('product_id', flat=True))
+								except Exception:
+									selected_products_hardware = []
 
 					# Mirror billing frequency values into single-field variables when only
 					# software or only hardware billing is present so the single-slot form
@@ -1557,6 +1660,11 @@ def add_lead(request):
 					slab = LeadCommissionSlab.objects.filter(lead=lead, lead_billing=lb).first()
 				except Exception:
 					slab = None
+				# collect selected product ids for this billing row
+				try:
+					selected_products = list(LeadBillingProduct.objects.filter(lead_billing=lb).values_list('product_id', flat=True))
+				except Exception:
+					selected_products = []
 				lead_billing_rows.append({
 					'id': getattr(lb, 'id', None),
 					'lead_for': getattr(lb, 'lead_for', ''),
@@ -1573,6 +1681,7 @@ def add_lead(request):
 					'commission_amount': getattr(slab, 'commission_amount', None) if slab else None,
 					'is_percentage_wise': bool(getattr(slab, 'is_percentage_wise', False)) if slab else False,
 					'slab_id': getattr(slab, 'id', None) if slab else None,
+					'selected_products': selected_products,
 				})
 	except Exception:
 		lead_billing_rows = []
@@ -1599,6 +1708,8 @@ def add_lead(request):
 		'selected_bill_type_hardware': selected_bill_type_hardware,
 		'selected_custome_month_hardware': selected_custome_month_hardware,
 		'lead_billing_rows': lead_billing_rows,
+		# available products for per-billing multi-select
+		'products': Product.objects.filter(is_deleted=False, is_draft=False).order_by('-created_at') if hasattr(Product, 'is_deleted') and hasattr(Product, 'is_draft') else Product.objects.all().order_by('-created_at'),
 		# billing template values (populated from POST or LeadBilling rows)
 		'selected_peremp_amount': selected_peremp_amount,
 		'selected_emp_count': selected_emp_count,
@@ -1608,6 +1719,10 @@ def add_lead(request):
 		'selected_emp_count_software': selected_emp_count_software,
 		'selected_another_amount_software': selected_another_amount_software,
 		'selected_another_amount_hardware': selected_another_amount_hardware,
+		# Details tab product selections
+		'selected_products': selected_products,
+		'selected_products_software': selected_products_software,
+		'selected_products_hardware': selected_products_hardware,
 		'partner_relations': Partner.RELATION_CHOICES,
 		'partner_status_choices': Partner.STATUS_CHOICES,
 	})

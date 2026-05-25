@@ -176,6 +176,10 @@ SESSION_COOKIE_NAME = 'session_elms' # Custom session cookie name
 # Login / authentication settings
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
+AUTHENTICATION_BACKENDS = [
+    'myapp.auth_backends.UsernameOrEmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 # URL patterns (regex-ish) that should be accessible without authentication
 LOGIN_EXEMPT_URLS = [
     r'^login/$',
