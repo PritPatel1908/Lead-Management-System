@@ -910,12 +910,12 @@
                       </div>
 
                       <hr />
-                      <div class="d-flex flex-column align-items-start">
+                      <hr class="my-2"/>
+                      <div class="d-flex flex-column align-items-start" id="commission-total-commission-section" style="display:none;">
                         <div class="d-flex justify-content-between w-100 align-items-center">
-                          <small class="text-muted">Total Amount</small>
-                          <div id="commission-summary-total" class="fs-4 fw-bold text-primary">--</div>
+                          <small class="text-muted fw-semibold">Total Commission</small>
+                          <div id="commission-total-commission" class="fs-4 fw-bold text-success">--</div>
                         </div>
-                        <div id="commission-summary-total-calc" class="text-muted small mt-1">&nbsp;</div>
                       </div>
                     </div>
                   </div>
@@ -969,8 +969,23 @@
                     amtEl.textContent = (sel && sel.value === 'fix_amount') ? '0.00' : '--';
                   }
                 }
+                try{ if(typeof window.updateTotalCommission==='function') window.updateTotalCommission(); }catch(e){}
               }catch(e){}
             }
+
+            function updateTotalCommission(){
+              try{
+                var total=0, hasAny=false;
+                document.querySelectorAll('[id^="commission_amount_"]').forEach(function(inp){
+                  var v=parseFloat(inp.value); if(!isNaN(v)&&v>0){total+=v;hasAny=true;}
+                });
+                var el=document.getElementById('commission-total-commission');
+                var sec=document.getElementById('commission-total-commission-section');
+                if(el) el.textContent = hasAny ? total.toFixed(2) : '--';
+                if(sec) sec.style.display = hasAny ? '' : 'none';
+              }catch(e){}
+            }
+            window.updateTotalCommission = updateTotalCommission;
 
             // helper to get base amount for a given lead_for value
             // Reads from mirrored commission-summary elements AND source summary elements
@@ -2197,6 +2212,7 @@ document.addEventListener('DOMContentLoaded', function() {
               if (amtInput){
                 amtInput.addEventListener('input', function(){
                   try{ var amtEl = document.getElementById('commission_slot_amount_' + id); if (amtEl){ var v = amtInput.value; var n = parseFloat(v); amtEl.textContent = (v !== '' ? (isNaN(n) ? v : n.toFixed(2)) : ((sel.value === 'fix_amount') ? '0.00' : '--')); } }catch(e){}
+                  try{ if(typeof window.updateTotalCommission==='function') window.updateTotalCommission(); }catch(e){}
                 });
               }
             }catch(e){}
@@ -2290,6 +2306,69 @@ document.addEventListener('DOMContentLoaded', function() {
       try { if (typeof window.updateSummary === 'function') window.updateSummary(); } catch(e){}
       // Also call copySummaryToCommission directly as a safety fallback
       try { if (typeof window.copySummaryToCommission === 'function') window.copySummaryToCommission(); } catch(e){}
+
+      // Directly populate commission right panel from billing data (reliable fallback)
+      try {
+        if (billing && Array.isArray(billing) && billing.length) {
+          var _hasSW = billing.some(function(b){ return (b.lead_for||'').toLowerCase()==='software'; });
+          var _hasHW = billing.some(function(b){ return (b.lead_for||'').toLowerCase()==='hardware'; });
+          var _swE = billing.find(function(b){ return (b.lead_for||'').toLowerCase()==='software'; });
+          var _hwE = billing.find(function(b){ return (b.lead_for||'').toLowerCase()==='hardware'; });
+          // hide all sections first
+          ['commission-summary-software-single','commission-summary-hardware-single','commission-summary-sw','commission-summary-hw'].forEach(function(sid){
+            var el=document.getElementById(sid); if(el) el.style.display='none';
+          });
+          if (_hasSW && _hasHW) {
+            var _swC=document.getElementById('commission-summary-sw');
+            if (_swC) {
+              _swC.style.display='';
+              var _st=parseFloat((_swE&&_swE.amount)||0)||0, _sa=parseFloat((_swE&&_swE.another_amount)||0)||0;
+              var _sip=!!(_swE&&_swE.is_peremp_wise_amount), _spa=parseFloat((_swE&&_swE.peremp_amount)||0)||0, _sec=parseInt((_swE&&_swE.emp_count)||0)||0;
+              var _e; _e=document.getElementById('commission-summary-sw-is-peremp'); if(_e) _e.textContent=_sip?'Yes':'No';
+              _e=document.getElementById('commission-summary-sw-peremp-amount'); if(_e) _e.textContent=_spa.toFixed(2);
+              _e=document.getElementById('commission-summary-sw-emp-count'); if(_e) _e.textContent=_sip?String(_sec):'0';
+              _e=document.getElementById('commission-summary-sw-another-amount'); if(_e) _e.textContent=_sa.toFixed(2);
+              _e=document.getElementById('commission-summary-sw-total'); if(_e) _e.textContent=_st.toFixed(2);
+            }
+            var _hwC=document.getElementById('commission-summary-hw');
+            if (_hwC) {
+              _hwC.style.display='';
+              var _ht=parseFloat((_hwE&&_hwE.amount)||0)||0, _ha=parseFloat((_hwE&&_hwE.another_amount)||0)||0;
+              var _e2; _e2=document.getElementById('commission-summary-hw-another-amount'); if(_e2) _e2.textContent=_ha.toFixed(2);
+              _e2=document.getElementById('commission-summary-hw-total'); if(_e2) _e2.textContent=_ht.toFixed(2);
+            }
+            var _grand=(parseFloat((_swE&&_swE.amount)||0)||0)+(parseFloat((_hwE&&_hwE.amount)||0)||0);
+            var _tEl=document.getElementById('commission-summary-total'); if(_tEl) _tEl.textContent=_grand.toFixed(2);
+          } else if (_hasSW && _swE) {
+            var _swS=document.getElementById('commission-summary-software-single');
+            if (_swS) {
+              _swS.style.display='';
+              var _st2=parseFloat(_swE.amount||0)||0, _sa2=parseFloat(_swE.another_amount||0)||0;
+              var _sip2=!!_swE.is_peremp_wise_amount, _spa2=parseFloat(_swE.peremp_amount||0)||0, _sec2=parseInt(_swE.emp_count||0)||0;
+              var _e3; _e3=document.getElementById('commission-summary-software-lead-for'); if(_e3) _e3.textContent='Software';
+              _e3=document.getElementById('commission-summary-software-is-peremp'); if(_e3) _e3.textContent=_sip2?'Yes':'No';
+              _e3=document.getElementById('commission-summary-software-peremp-amount'); if(_e3) _e3.textContent=_spa2.toFixed(2);
+              _e3=document.getElementById('commission-summary-software-emp-count'); if(_e3) _e3.textContent=_sip2?String(_sec2):'0';
+              _e3=document.getElementById('commission-summary-software-another-amount'); if(_e3) _e3.textContent=_sa2.toFixed(2);
+              _e3=document.getElementById('commission-summary-software-total'); if(_e3) _e3.textContent=_st2.toFixed(2);
+              var _tEl2=document.getElementById('commission-summary-total'); if(_tEl2) _tEl2.textContent=_st2.toFixed(2);
+            }
+          } else if (_hasHW && _hwE) {
+            var _hwS=document.getElementById('commission-summary-hardware-single');
+            if (_hwS) {
+              _hwS.style.display='';
+              var _ht2=parseFloat(_hwE.amount||0)||0, _ha2=parseFloat(_hwE.another_amount||0)||0;
+              var _e4; _e4=document.getElementById('commission-summary-hardware-lead-for'); if(_e4) _e4.textContent='Hardware';
+              _e4=document.getElementById('commission-summary-hardware-another-amount-single'); if(_e4) _e4.textContent=_ha2.toFixed(2);
+              _e4=document.getElementById('commission-summary-hardware-total-single'); if(_e4) _e4.textContent=_ht2.toFixed(2);
+              var _tEl3=document.getElementById('commission-summary-total'); if(_tEl3) _tEl3.textContent=_ht2.toFixed(2);
+            }
+          }
+        }
+      } catch(e) {}
+
+      // Update total commission amount from per-slot inputs
+      try { if (typeof window.updateTotalCommission === 'function') window.updateTotalCommission(); } catch(e){}
 
       // Ensure any percentage-based commission slots are computed immediately
       // after the commission tab is rebuilt so changes take effect without
