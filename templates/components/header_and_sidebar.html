@@ -1136,7 +1136,7 @@
                             <span class="nav-link-icon">
                                 <span class="fas fa-calendar-day"></span>
                             </span>
-                            <span class="nav-link-text ps-1">Events</span>
+                            <span class="nav-link-text ps-1">Masters</span>
                         </div>
                     </a>
                     <ul class="nav collapse show" id="masters">
@@ -1205,15 +1205,27 @@
                         </div>
                     </div>
                     <!-- parent pages-->
-                    {% url 'lead_list' as lead_list_url %}
-                    <a class="nav-link {% if lead_list_url in request.path %}active{% endif %}" href="{{ lead_list_url }}" role="button" {% if lead_list_url in request.path %}aria-current="page"{% endif %}>
+                     <a class="nav-link dropdown-indicator" href="#leadmanagement" role="button" data-bs-toggle="collapse" aria-expanded="true" aria-controls="leadmanagement">
                         <div class="d-flex align-items-center">
                             <span class="nav-link-icon">
-                                <span class="fas fa-bullhorn"></span>
+                                <span class="fas fa-handshake"></span>
                             </span>
-                            <span class="nav-link-text ps-1">Leads</span>
+                            <span class="nav-link-text ps-1">Lead Management</span>
                         </div>
                     </a>
+                     <ul class="nav collapse show" id="leadmanagement">
+                        <li class="nav-item">
+                            {% url 'lead_list' as lead_list_url %}
+                            <a class="nav-link {% if lead_list_url in request.path %}active{% endif %}" href="{{ lead_list_url }}" role="button" {% if lead_list_url in request.path %}aria-current="page"{% endif %}>
+                                <div class="d-flex align-items-center">
+                                    <span class="nav-link-icon">
+                                        <span class="fas fa-bullhorn"></span>
+                                    </span>
+                                    <span class="nav-link-text ps-1">Leads</span>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
             </ul>
         </div>
